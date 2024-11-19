@@ -27,7 +27,7 @@ class CardGame:
         Example: 'red_1.png', 'blue_10.png'
         """
         # Specify the directory where your card images are stored
-        image_dir = 'cards'  # Create a 'cards' folder in your project directory
+        image_dir = 'resources/images/cards'  # Create a 'cards' folder in your project directory
         
         # Make sure the images directory exists
         if not os.path.exists(image_dir):
