@@ -204,15 +204,15 @@ class MainScreen(ScreenBase):
         pos_4 = (1156 * bg_ratio, 545 * bg_ratio)
         pos_5 = (1499 * bg_ratio, 617 * bg_ratio)
 
-        card_red_1 = RenderableImage("resources/images/card/red_1.png", position2d=pos_1, scale2d=(0.3, 0.3),
+        card_red_1 = RenderableImage("resources/images/cards/red_1.png", position2d=pos_1, scale2d=(0.3, 0.3),
                                      rotation2d=rotation_15_deg)
-        card_red_2 = RenderableImage("resources/images/card/red_2.png", position2d=pos_2, scale2d=(0.3, 0.3),
+        card_red_2 = RenderableImage("resources/images/cards/red_2.png", position2d=pos_2, scale2d=(0.3, 0.3),
                                      rotation2d=rotation_15_deg)
-        card_red_3 = RenderableImage("resources/images/card/red_3.png", position2d=pos_3, scale2d=(0.3, 0.3),
+        card_red_3 = RenderableImage("resources/images/cards/red_3.png", position2d=pos_3, scale2d=(0.3, 0.3),
                                      rotation2d=rotation_15_deg)
-        card_red_4 = RenderableImage("resources/images/card/red_4.png", position2d=pos_4, scale2d=(0.3, 0.3),
+        card_red_4 = RenderableImage("resources/images/cards/red_4.png", position2d=pos_4, scale2d=(0.3, 0.3),
                                      rotation2d=rotation_15_deg)
-        card_red_5 = RenderableImage("resources/images/card/red_5.png", position2d=pos_5, scale2d=(0.3, 0.3),
+        card_red_5 = RenderableImage("resources/images/cards/red_5.png", position2d=pos_5, scale2d=(0.3, 0.3),
                                      rotation2d=rotation_15_deg)
 
         self.objects.append(background)
