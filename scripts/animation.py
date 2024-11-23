@@ -272,10 +272,10 @@ def ease_in_out_2d(property_name, start_pos, end_pos, duration=1):
     return animation_task
 
 
-def ping_pong(property_name, start_pos, end_pos, duration=1):
-    animation_task = AnimationTask(duration=duration * 2, loop=True)
-    curve_x = PingPongCurve(start_pos[0], end_pos[0], duration)
-    curve_y = PingPongCurve(start_pos[1], end_pos[1], duration)
+def ping_pong(property_name, start_pos, end_pos, duration):
+    animation_task = AnimationTask(duration=duration, loop=True)
+    curve_x = PingPongCurve(start_pos[0], end_pos[0], duration * 0.5)
+    curve_y = PingPongCurve(start_pos[1], end_pos[1], duration * 0.5)
     _2d_curve = Animation2DCurve(curve_x, curve_y)
     animation_task.bind_property(property_name, _2d_curve)
     return animation_task
@@ -317,9 +317,22 @@ def smooth_damp_2d(property_name, start_pos, end_pos, duration = 1):
     return animation_task
 
 
-def hop_sequence(property_name, start_pos, offset, pre_time=1, post_time=1, loop=True):
+def hop_sequence(property_name, start_pos, offset, pre_time=1, post_time=1, hop_time = 0.3, loop=True):
     animation_task_1 = constant_2d(property_name, start_pos, pre_time)
-    animation_task_2 = hop_2d(property_name, start_pos, offset, 0.3)
+    animation_task_2 = hop_2d(property_name, start_pos, offset, hop_time)
+    animation_task_3 = constant_2d(property_name, start_pos, post_time)
+
+    sequence_task = AnimationSequenceTask(loop=loop)
+    sequence_task.add_sub_task(animation_task_1)
+    sequence_task.add_sub_task(animation_task_2)
+    sequence_task.add_sub_task(animation_task_3)
+
+    return sequence_task
+
+def sway_sequence(property_name, start_pos, end_pos, pre_time=1, post_time=1, hop_time = 0.5, loop=True):
+
+    animation_task_1 = constant_2d(property_name, start_pos, pre_time)
+    animation_task_2 = ping_pong(property_name, start_pos,  end_pos, hop_time)
     animation_task_3 = constant_2d(property_name, start_pos, post_time)
 
     sequence_task = AnimationSequenceTask(loop=loop)

@@ -5,8 +5,9 @@ from pygame.locals import *
 import random
 from scripts.animation import *
 import scripts.math_util as math_util
+from scripts.math_util import vec_2d_minus, normalize_vec2d, vec_2d_mul, euler_angle_to_rotation
 
-WINDOW_WIDTH = 600
+WINDOW_WIDTH = 700
 WINDOW_HEIGHT = 500
 
 game_over = False
@@ -194,26 +195,52 @@ class ScreenBase:
 class MainScreen(ScreenBase):
     def __init__(self):
         super().__init__(pygame.Color('black'), None)
-        background = Background("resources/images/ui/screen/PlayScreen.png")
+        background = Background("resources/images/ui/screen/StartScreenObject/Rectangle.png")
         # ball = RenderableImage("ball.png",position2d=(100, 100), scale2d=(0.1, 0.1))
-        rotation_15_deg = math_util.euler_angle_to_rotation(15)
+        rotation_identity = math_util.euler_angle_to_rotation(0)
         bg_ratio = 500 / 3546
+        pos_0 = (3670 * bg_ratio,809 * bg_ratio)
         pos_1 = (499 * bg_ratio, 1049 * bg_ratio)
         pos_2 = (668 * bg_ratio, 777 * bg_ratio)
         pos_3 = (971 * bg_ratio, 849 * bg_ratio)
         pos_4 = (1156 * bg_ratio, 545 * bg_ratio)
-        pos_5 = (1499 * bg_ratio, 617 * bg_ratio)
+        pos_5 = (1560 * bg_ratio, 593 * bg_ratio)
+        pos_6 = (3096 * bg_ratio, 625 * bg_ratio)
+        pos_7 = (3462 * bg_ratio, 689 * bg_ratio)
+        pos_8 = (3825 * bg_ratio, 750 * bg_ratio)
+        pos_9 = (4137 * bg_ratio, 945 * bg_ratio)
+        pos_10 = (1972 * bg_ratio, 2729 * bg_ratio)
+        pos_11 = (2356 * bg_ratio, 2641 * bg_ratio)
+        pos_12 = (2755 * bg_ratio, 2689 * bg_ratio)
 
-        card_red_1 = RenderableImage("resources/images/cards/red_1.png", position2d=pos_1, scale2d=(0.3, 0.3),
-                                     rotation2d=rotation_15_deg)
-        card_red_2 = RenderableImage("resources/images/cards/red_2.png", position2d=pos_2, scale2d=(0.3, 0.3),
-                                     rotation2d=rotation_15_deg)
-        card_red_3 = RenderableImage("resources/images/cards/red_3.png", position2d=pos_3, scale2d=(0.3, 0.3),
-                                     rotation2d=rotation_15_deg)
-        card_red_4 = RenderableImage("resources/images/cards/red_4.png", position2d=pos_4, scale2d=(0.3, 0.3),
-                                     rotation2d=rotation_15_deg)
-        card_red_5 = RenderableImage("resources/images/cards/red_5.png", position2d=pos_5, scale2d=(0.3, 0.3),
-                                     rotation2d=rotation_15_deg)
+        card_red_1 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1.png", position2d=pos_1, scale2d=(0.16, 0.16),
+                                     rotation2d=rotation_identity)
+        card_red_2 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (1).png", position2d=pos_2, scale2d=(0.16, 0.16),
+                                     rotation2d=rotation_identity)
+        card_red_3 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (2).png", position2d=pos_3, scale2d=(0.16, 0.16),
+                                     rotation2d=rotation_identity)
+        card_red_4 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (3).png", position2d=pos_4, scale2d=(0.16, 0.16),
+                                     rotation2d=rotation_identity)
+        card_red_5 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (4).png", position2d=pos_5, scale2d=(0.16, 0.16),
+                                     rotation2d=rotation_identity)
+        card_red_6 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (8).png", position2d=pos_6, scale2d=(0.16, 0.16),
+                                     rotation2d=rotation_identity)
+        card_red_7 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (7).png", position2d=pos_7, scale2d=(0.16, 0.16),
+                                     rotation2d=rotation_identity)
+        card_red_8 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (6).png", position2d=pos_8, scale2d=(0.16, 0.16),
+                                     rotation2d=rotation_identity)
+        card_red_9 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (5).png", position2d=pos_9, scale2d=(0.16, 0.16),
+                                     rotation2d=rotation_identity)
+
+        title_image = RenderableImage("resources/images/ui/screen/StartScreenObject/NottyGame.png", position2d=(WINDOW_WIDTH * 0.5, WINDOW_HEIGHT * 0.5), scale2d=(0.16, 0.16),
+                                     rotation2d=rotation_identity)
+
+        card_yellow_1 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (10).png", position2d=pos_10, scale2d=(0.16, 0.16),
+                                     rotation2d=rotation_identity)
+        card_yellow_2 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (11).png", position2d=pos_11, scale2d=(0.16, 0.16),
+                                     rotation2d=rotation_identity)
+        card_yellow_3 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (12).png", position2d=pos_12, scale2d=(0.16, 0.16),
+                                     rotation2d=rotation_identity)
 
         self.objects.append(background)
         self.objects.append(card_red_1)
@@ -221,17 +248,37 @@ class MainScreen(ScreenBase):
         self.objects.append(card_red_3)
         self.objects.append(card_red_4)
         self.objects.append(card_red_5)
+        self.objects.append(card_red_6)
+        self.objects.append(card_red_7)
+        self.objects.append(card_red_8)
+        self.objects.append(card_red_9)
+        self.objects.append(title_image)
+        self.objects.append(card_yellow_1)
+        self.objects.append(card_yellow_2)
+        self.objects.append(card_yellow_3)
 
-        # animation.play_animation(self.ball, sine_scale_AnimationTask("size2d"))
+        start_screen_group = [card_red_1, card_red_2, card_red_3, card_red_4, card_red_5, card_red_6, card_red_7, card_red_8, card_red_9]
+
         # animation.play_animation(self.ball, move_to("position2d",(100,100),(200,200),1))
         # animation.play_animation(self.ball, ease_in_out_2d("position2d",(100,100),(300, 300),1))
         # animation.play_animation(card_red_1, ping_pong("position2d", (100, 100), (150, 200), 1))
         # animation.play_animation(card_red_1, hop_2d("position2d", pos_1, (-10, -10), 0.3))
-        animation.play_animation(card_red_1, hop_sequence("position2d", pos_1, (-10, -10), pre_time=0.5, post_time=1))
-        animation.play_animation(card_red_2, hop_sequence("position2d", pos_2, (-10, -10), pre_time=0.6, post_time=0.9))
-        animation.play_animation(card_red_3, hop_sequence("position2d", pos_3, (-10, -10), pre_time=0.7, post_time=0.8))
-        animation.play_animation(card_red_4, hop_sequence("position2d", pos_4, (-10, -10), pre_time=0.8, post_time=0.7))
-        animation.play_animation(card_red_5, hop_sequence("position2d", pos_5, (-10, -10), pre_time=0.9, post_time=0.6))
+
+        central_point = (WINDOW_HEIGHT * 0.5, WINDOW_HEIGHT)
+        pretime = 0
+        posttime = 2
+        for card in start_screen_group:
+            # calc the motion offset for each card
+            offset = math_util.vec_2d_mul(normalize_vec2d(vec_2d_minus(card.position2d, central_point)),10)
+            end_pos =  math_util.vec_2d_plus(card.position2d, offset)
+            pretime += 0.1
+            posttime -= 0.1
+            animation.play_animation(card,
+                                     sway_sequence("position2d", card.position2d, end_pos, pretime, posttime))
+
+        animation.play_animation(title_image, ping_pong("scale2d", (0.15,0.15),(0.16,0.16), 2))
+        animation.play_animation(card_yellow_1, sway_sequence("rotation2d",card_yellow_1.rotation2d, euler_angle_to_rotation(5),0,4,hop_time=0.7))
+        animation.play_animation(card_yellow_3, sway_sequence("rotation2d",card_yellow_3.rotation2d, euler_angle_to_rotation(-5),2,2,hop_time=0.7))
 
 
 class GameOverScreen(ScreenBase):
