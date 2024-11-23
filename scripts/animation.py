@@ -108,24 +108,32 @@ class Animation:
     """
     def __init__(self):
         print("Animation initialized")
-        self.gameObjectAnimationTaskDict = {}
+        self.gameObjectAnimationTaskDict_base = {}
+        self.gameObjectAnimationTaskDict_layer_1 = {}
+        self.gameObjectAnimationTaskDict_Layer_2 = {}
         self.clock = pygame.time.Clock()
 
-    def register_animation_task(self, gameObject, animation_task):
-        self.gameObjectAnimationTaskDict[gameObject] = animation_task
+    def register_animation_task(self, gameObject, animation_task, layer=0):
+        if layer == 0:
+            self.gameObjectAnimationTaskDict_base[gameObject] = animation_task
+        elif layer == 1:
+            self.gameObjectAnimationTaskDict_layer_1[gameObject] = animation_task
+        elif layer == 2:
+            self.gameObjectAnimationTaskDict_Layer_2[gameObject] = animation_task
 
-    def play_animation(self, gameObject, animation_task):
-        self.register_animation_task(gameObject,animation_task)
+    def play_animation(self, gameObject, animation_task, layer=0):
+        self.register_animation_task(gameObject,animation_task, layer)
 
     def update(self):
         dt = self.clock.tick(60)/1000
-        for (gameObject, animationTask) in self.gameObjectAnimationTaskDict.items():
-            if animationTask is not None:
-                if animationTask.finished:
-                    self.gameObjectAnimationTaskDict[gameObject] = None
-                    continue
-                else:
-                    animationTask.update(gameObject, dt)
+        for gameObjectAnimationTaskDict in [self.gameObjectAnimationTaskDict_base, self.gameObjectAnimationTaskDict_layer_1, self.gameObjectAnimationTaskDict_Layer_2]:
+            for (gameObject, animationTask) in gameObjectAnimationTaskDict.items():
+                if animationTask is not None:
+                    if animationTask.finished:
+                        gameObjectAnimationTaskDict[gameObject] = None
+                        continue
+                    else:
+                        animationTask.update(gameObject, dt)
 
 
 class ConstantCurve(AnimationCurve):
@@ -138,6 +146,21 @@ class ConstantCurve(AnimationCurve):
 
     def evaluate(self, t):
         return self.constant_value
+
+
+class OvershootCurve(AnimationCurve):
+    def __init__(self, start, end, duration, overshoot = 1):
+        super().__init__()
+        self.start = start
+        self.end = end
+        self.duration = duration
+        self.overshoot = overshoot
+
+    def evaluate(self, t):
+        x = t / self.duration
+        overshoot = self.overshoot * (1 - math.cos(2*math.pi * x)) * 0.5
+        base =  (1 - math.cos(math.pi * x)) * 0.5
+        return (base + overshoot) * (self.end - self.start) + self.start
 
 
 class SineCurve(AnimationCurve):
@@ -272,10 +295,26 @@ def ease_in_out_2d(property_name, start_pos, end_pos, duration=1):
     return animation_task
 
 
+def ease_in_out_1d(property_name, start_pos, end_pos, duration=1):
+    animation_task = AnimationTask(duration=duration, loop=False)
+    curve = EaseInOutCurve(start_pos, end_pos, duration)
+    animation_task.bind_property(property_name, curve)
+    return animation_task
+
+
 def ping_pong(property_name, start_pos, end_pos, duration):
     animation_task = AnimationTask(duration=duration, loop=True)
     curve_x = PingPongCurve(start_pos[0], end_pos[0], duration * 0.5)
     curve_y = PingPongCurve(start_pos[1], end_pos[1], duration * 0.5)
+    _2d_curve = Animation2DCurve(curve_x, curve_y)
+    animation_task.bind_property(property_name, _2d_curve)
+    return animation_task
+
+
+def overshoot_2d(property_name, start_pos, end_pos, duration, overshoot = 1):
+    animation_task = AnimationTask(duration=duration, loop=False)
+    curve_x = OvershootCurve(start_pos[0], end_pos[0], duration, overshoot = overshoot)
+    curve_y = OvershootCurve(start_pos[1], end_pos[1], duration, overshoot = overshoot)
     _2d_curve = Animation2DCurve(curve_x, curve_y)
     animation_task.bind_property(property_name, _2d_curve)
     return animation_task
@@ -296,6 +335,12 @@ def constant_2d(property_name, constant2d, duration=1):
     curve_y = ConstantCurve(constant2d[1])
     _2d_curve = Animation2DCurve(curve_x, curve_y)
     animation_task.bind_property(property_name, _2d_curve)
+    return animation_task
+
+def constant_1d(property_name, constant, duration=1):
+    animation_task = AnimationTask(duration=duration, loop=False)
+    curve = ConstantCurve(constant)
+    animation_task.bind_property(property_name, curve)
     return animation_task
 
 

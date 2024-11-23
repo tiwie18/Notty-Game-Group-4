@@ -15,10 +15,11 @@ current_screen = None
 
 
 class VisualObject:
-    def __init__(self, position2d=(0, 0), scale2d=(1, 1), rotation2d=(1, 0)):
+    def __init__(self, position2d=(0, 0), scale2d=(1, 1), rotation2d=(1, 0), alpha = 255):
         self.position2d = position2d
         self.scale2d = scale2d
         self.rotation2d = rotation2d
+        self.alpha = alpha
         pass
 
     @property
@@ -44,10 +45,10 @@ class RenderableImage(VisualObject):
     '''
     A class that provide basic rendering functionality for images along with transformation (position, scale, rotation)
     '''
-    def __init__(self, image_src, position2d=(0, 0), scale2d=(1, 1), rotation2d=(1, 0)):
-        super().__init__(position2d=position2d, scale2d=scale2d, rotation2d=rotation2d)
+    def __init__(self, image_src, position2d=(0, 0), scale2d=(1, 1), rotation2d=(1, 0), alpha = 255):
+        super().__init__(position2d=position2d, scale2d=scale2d, rotation2d=rotation2d, alpha=alpha)
         self.image_src = image_src
-        self.image = pygame.image.load(image_src)
+        self.image = pygame.image.load(image_src).convert_alpha()
         self._store_cache()
 
     def _transform_image(self):
@@ -75,6 +76,7 @@ class RenderableImage(VisualObject):
         transformed_image = pygame.transform.scale(transformed_image,
                                                    (rect.width * scale_ratio, rect.height * scale_ratio))
         # t (not needed to be processed here)
+        transformed_image.set_alpha(self.alpha)
         return transformed_image
 
     # calculate the size using given scale. e.g. the original image is 100*100, scale (2,2) will make the size 200*200
@@ -90,13 +92,14 @@ class RenderableImage(VisualObject):
         self._cached_transformed_image = self._transform_image()
         self._cached_size2d = self._size2d()
         self._cached_rotation2d = self.rotation2d
+        self._cached_alpha = self.alpha
 
     # when properties changed e.g. scale or the whole image src, it requires a resample, which means update the cache
     def _update_cache_if_dirty(self):
         if self.image_src != self._cached_image_src:
             self.image = pygame.image.load(self.image_src)
             self._store_cache()
-        elif self._cached_size2d != self._size2d() or self.rotation2d != self._cached_rotation2d:
+        elif self._cached_size2d != self._size2d() or self.rotation2d != self._cached_rotation2d or self.alpha != self._cached_alpha:
             self._store_cache()
 
     def draw(self, screen):
@@ -257,7 +260,9 @@ class MainScreen(ScreenBase):
         self.objects.append(card_yellow_2)
         self.objects.append(card_yellow_3)
 
-        start_screen_group = [card_red_1, card_red_2, card_red_3, card_red_4, card_red_5, card_red_6, card_red_7, card_red_8, card_red_9]
+        start_screen_upper_group = [card_red_1, card_red_2, card_red_3, card_red_4, card_red_5, card_red_6, card_red_7, card_red_8, card_red_9]
+        start_screen_lower_group = [card_yellow_1, card_yellow_2, card_yellow_3]
+        start_screen_group = [card_red_1, card_red_2, card_red_3, card_red_4, card_red_5, card_red_6, card_red_7, card_red_8, card_red_9, title_image, card_yellow_1, card_yellow_2,card_yellow_3]
 
         # animation.play_animation(self.ball, move_to("position2d",(100,100),(200,200),1))
         # animation.play_animation(self.ball, ease_in_out_2d("position2d",(100,100),(300, 300),1))
@@ -267,7 +272,7 @@ class MainScreen(ScreenBase):
         central_point = (WINDOW_HEIGHT * 0.5, WINDOW_HEIGHT)
         pretime = 0
         posttime = 2
-        for card in start_screen_group:
+        for card in start_screen_upper_group:
             # calc the motion offset for each card
             offset = math_util.vec_2d_mul(normalize_vec2d(vec_2d_minus(card.position2d, central_point)),10)
             end_pos =  math_util.vec_2d_plus(card.position2d, offset)
@@ -276,9 +281,46 @@ class MainScreen(ScreenBase):
             animation.play_animation(card,
                                      sway_sequence("position2d", card.position2d, end_pos, pretime, posttime))
 
+            card.scale2d = (0, 0)
+            scale_animation_sequence = AnimationSequenceTask(loop=False)
+
+            animation_task_1 = constant_2d("scale2d", (0, 0), pretime + 1)
+            animation_task_2 = overshoot_2d("scale2d", (0, 0), (0.15, 0.15), 0.5, overshoot=0.6)
+            animation_task_3 = constant_2d("scale2d", (0.15, 0.15), posttime)
+
+            scale_animation_sequence.add_sub_task(animation_task_1)
+            scale_animation_sequence.add_sub_task(animation_task_2)
+            scale_animation_sequence.add_sub_task(animation_task_3)
+
+            animation.play_animation(card, scale_animation_sequence, layer=1)
+
         animation.play_animation(title_image, ping_pong("scale2d", (0.15,0.15),(0.16,0.16), 2))
+        title_image.alpha = 0
+
+        alpha_animation_sequence = AnimationSequenceTask(loop=False)
+        alpha_animation_sequence.add_sub_task(constant_1d("alpha", 0,2))
+        alpha_animation_sequence.add_sub_task(ease_in_out_1d("alpha", 0, 255, 2))
+        alpha_animation_sequence.add_sub_task(constant_1d("alpha", 255,3))
+
+        animation.play_animation(title_image, alpha_animation_sequence, layer=1)
         animation.play_animation(card_yellow_1, sway_sequence("rotation2d",card_yellow_1.rotation2d, euler_angle_to_rotation(5),0,4,hop_time=0.7))
         animation.play_animation(card_yellow_3, sway_sequence("rotation2d",card_yellow_3.rotation2d, euler_angle_to_rotation(-5),2,2,hop_time=0.7))
+
+        for card in start_screen_lower_group:
+            pretime += 0.1
+            posttime -= 0.1
+            card.scale2d = (0, 0)
+            scale_animation_sequence = AnimationSequenceTask(loop=False)
+
+            animation_task_1 = constant_2d("scale2d", (0, 0), pretime + 1)
+            animation_task_2 = overshoot_2d("scale2d", (0, 0), (0.15, 0.15), 0.5, overshoot=0.6)
+            animation_task_3 = constant_2d("scale2d", (0.15, 0.15), posttime)
+
+            scale_animation_sequence.add_sub_task(animation_task_1)
+            scale_animation_sequence.add_sub_task(animation_task_2)
+            scale_animation_sequence.add_sub_task(animation_task_3)
+
+            animation.play_animation(card, scale_animation_sequence, layer=1)
 
 
 class GameOverScreen(ScreenBase):
