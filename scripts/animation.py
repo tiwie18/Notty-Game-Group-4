@@ -412,7 +412,7 @@ def sway_sequence(property_name, start_pos, end_pos, pre_time=1, post_time=1, ho
 
     return sequence_task
 
-def hop_with_overshoot_sequence(property_name, start_pos, offset, pre_time=1, post_time=1, hop_time = 0.5, overshoot=0.5, loop=True):
+def hop_with_overshoot_sequence(property_name, start_pos, offset, pre_time=1, post_time=1, hop_time = 0.5, loop=True):
 
     animation_task_1 = constant_2d(property_name, start_pos, pre_time)
     animation_task_2 = hop_with_overshoot_2d(property_name, start_pos, offset, hop_time)
