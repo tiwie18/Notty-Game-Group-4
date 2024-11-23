@@ -163,6 +163,21 @@ class OvershootCurve(AnimationCurve):
         return (base + overshoot) * (self.end - self.start) + self.start
 
 
+class HopWithOvershootCurve(AnimationCurve):
+    def __init__(self, start, offset, duration):
+        super().__init__()
+        self.start = start
+        self.offset = offset
+        self.duration = duration
+
+    def evaluate(self, t):
+        x = t / self.duration
+        base = math.sin(math.pi * 2 * x * x)
+        attenuation = math.cos(0.5 * math.pi * x)
+        fx = base * attenuation * 1.37288
+        return self.start + fx * self.offset
+
+
 class SineCurve(AnimationCurve):
     """
     return a sine curve when evaluated
@@ -320,6 +335,15 @@ def overshoot_2d(property_name, start_pos, end_pos, duration, overshoot = 1):
     return animation_task
 
 
+def hop_with_overshoot_2d(property_name, start_pos, offset, duration):
+    animation_task = AnimationTask(duration=duration, loop=False)
+    curve_x = HopWithOvershootCurve(start_pos[0], offset[0], duration)
+    curve_y = HopWithOvershootCurve(start_pos[1], offset[1], duration)
+    _2d_curve = Animation2DCurve(curve_x, curve_y)
+    animation_task.bind_property(property_name, _2d_curve)
+    return animation_task
+
+
 def hop_2d(property_name, start_pos, offset, duration=1):
     animation_task = AnimationTask(duration=duration, loop=False)
     curve_x = HopCurve(start_pos[0], offset[0], duration)
@@ -374,10 +398,24 @@ def hop_sequence(property_name, start_pos, offset, pre_time=1, post_time=1, hop_
 
     return sequence_task
 
+
 def sway_sequence(property_name, start_pos, end_pos, pre_time=1, post_time=1, hop_time = 0.5, loop=True):
 
     animation_task_1 = constant_2d(property_name, start_pos, pre_time)
     animation_task_2 = ping_pong(property_name, start_pos,  end_pos, hop_time)
+    animation_task_3 = constant_2d(property_name, start_pos, post_time)
+
+    sequence_task = AnimationSequenceTask(loop=loop)
+    sequence_task.add_sub_task(animation_task_1)
+    sequence_task.add_sub_task(animation_task_2)
+    sequence_task.add_sub_task(animation_task_3)
+
+    return sequence_task
+
+def hop_with_overshoot_sequence(property_name, start_pos, offset, pre_time=1, post_time=1, hop_time = 0.5, overshoot=0.5, loop=True):
+
+    animation_task_1 = constant_2d(property_name, start_pos, pre_time)
+    animation_task_2 = hop_with_overshoot_2d(property_name, start_pos, offset, hop_time)
     animation_task_3 = constant_2d(property_name, start_pos, post_time)
 
     sequence_task = AnimationSequenceTask(loop=loop)

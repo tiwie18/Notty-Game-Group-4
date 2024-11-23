@@ -73,7 +73,7 @@ class RenderableImage(VisualObject):
         transformed_image = pygame.transform.rotate(transformed_image, angle)
         rect = transformed_image.get_rect()
         # finally scale the image to given size
-        transformed_image = pygame.transform.scale(transformed_image,
+        transformed_image = pygame.transform.smoothscale(transformed_image,
                                                    (rect.width * scale_ratio, rect.height * scale_ratio))
         # t (not needed to be processed here)
         transformed_image.set_alpha(self.alpha)
@@ -279,7 +279,7 @@ class MainScreen(ScreenBase):
             pretime += 0.1
             posttime -= 0.1
             animation.play_animation(card,
-                                     sway_sequence("position2d", card.position2d, end_pos, pretime, posttime))
+                                     hop_with_overshoot_sequence("position2d", card.position2d, offset, pretime, posttime))
 
             card.scale2d = (0, 0)
             scale_animation_sequence = AnimationSequenceTask(loop=False)
@@ -303,8 +303,8 @@ class MainScreen(ScreenBase):
         alpha_animation_sequence.add_sub_task(constant_1d("alpha", 255,3))
 
         animation.play_animation(title_image, alpha_animation_sequence, layer=1)
-        animation.play_animation(card_yellow_1, sway_sequence("rotation2d",card_yellow_1.rotation2d, euler_angle_to_rotation(5),0,4,hop_time=0.7))
-        animation.play_animation(card_yellow_3, sway_sequence("rotation2d",card_yellow_3.rotation2d, euler_angle_to_rotation(-5),2,2,hop_time=0.7))
+        animation.play_animation(card_yellow_1, hop_with_overshoot_sequence("rotation2d",card_yellow_1.rotation2d, euler_angle_to_rotation(5),0,4,hop_time=0.7))
+        animation.play_animation(card_yellow_3, hop_with_overshoot_sequence("rotation2d",card_yellow_3.rotation2d, euler_angle_to_rotation(-5),2,2,hop_time=0.7))
 
         for card in start_screen_lower_group:
             pretime += 0.1
