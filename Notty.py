@@ -189,7 +189,7 @@ class Label(RenderableImage):
 
 class ClickableLabel(Label):
     def __init__(self, image_path1, image_path2, pos, scale_factor=0.2):
-        super().__init__(image_path1, pos)
+        super().__init__(image_path1, pos, scale_factor=scale_factor)
         self.image_path1 = image_path1  # pict for normal(without click)
         self.image_path2 = image_path2  # pict for hover
         # self.img_normal = load_and_scale_image(self.image_path1, scale_factor)
@@ -303,6 +303,11 @@ class GamePassLabel(ClickableLabel):
         pass
 
 
+class DeckLabel(ClickableLabel):
+    def click(self):
+        global current_screen
+
+
 class NewGameLabel(ClickableLabel):
     def click(self):
         global current_screen
@@ -405,58 +410,6 @@ class Player(VisualObject):
                 card.y = start_y  # Keep y constant for all cards
                 card.orientation = 'top'  # Rotate cards for the top player
                 card.draw(screen)
-
-
-class Deck(VisualObject):
-    def __init__(self, screen_width, screen_height, card_back_image="cards/backside_card.png", card_count=20,
-                 card_spacing=5):
-        super().__init__()
-        self.screen_width = screen_width
-        self.screen_height = screen_height
-        self.card_back_image = card_back_image  # Image for the back of the cards
-        self.card_count = card_count  # Number of cards in the deck
-        self.card_spacing = card_spacing  # Vertical spacing between cards to create "stacked" effect
-        self.cards = []  # List to hold the cards
-
-        # Load the back image of the card
-        if not os.path.exists(self.card_back_image):
-            print(f"Warning: Image {self.card_back_image} not found. Make sure it's in the correct path.")
-            return
-
-        self.card_back = pygame.image.load(self.card_back_image)
-        self.card_width = self.card_back.get_width()  # Get card width from the image
-        self.card_height = self.card_back.get_height()  # Get card height from the image
-
-        # Calculate the total height of the stack (stack of cards)
-        total_height = self.card_height + (self.card_count - 1) * self.card_spacing
-
-        # Center the deck stack horizontally and vertically on the screen
-        self.x = (self.screen_width - self.card_width) // 2
-        self.y = (self.screen_height - total_height) // 2
-
-        # Load the cards into the deck
-        self.load_cards()
-
-    def load_cards(self):
-        """Load the deck with facedown cards."""
-        # Create a list of positions for the cards, stacked vertically with a slight offset
-        for i in range(self.card_count):
-            card_y = self.y + i * self.card_spacing  # Incremental vertical offset
-            self.cards.append(card_y)
-
-    def draw(self, screen):
-        """Draw the stack of facedown cards."""
-        for i, card_y in enumerate(self.cards):
-            # Draw the card image at the calculated position
-            screen.blit(self.card_back, (self.x, card_y))
-
-    def update(self):
-        """Any updates to the deck can go here."""
-        pass
-
-    def mouseup(self, event):
-        """Handle mouse events if needed (e.g., clicking to draw a card)."""
-        pass
 
 
 class ScreenBase:
@@ -611,21 +564,21 @@ class PlayScreen(ScreenBase):
         for player in self.players:
             self.objects.append(player)
 
-        # Create the deck with face-down cards and add it to the objects list
-        self.deck = Deck(80, 120, "cards/backside_card.png")  # Example position for the deck
-        self.objects.append(self.deck)
+        # Create the clickable labels for game actions
+
         global PATH_LABELS
 
-        # Create the clickable labels for game actions
-        self.game_pass_label = ClickableLabel(os.path.join(PATH_LABELS, "game_pass_label.png"), os.path.join(PATH_LABELS, "clickable_game_pass_label.png"),
-                                             (50, 550),0.2)  # Position the label horizontally at the bottom
-        self.draw_card_label = ClickableLabel(os.path.join(PATH_LABELS, "draw_card_label.png"), os.path.join(PATH_LABELS, "clickable_draw_card_label.png"),
-                                             (200, 550),0.2)
-        self.discard_label = ClickableLabel(os.path.join(PATH_LABELS, "discard_label.png"), os.path.join("clickable_discard_label.png"), (350, 550),0.2)
-        self.play_for_me_label = ClickableLabel(os.path.join(PATH_LABELS, "play_for_me_label.png"),
-                                                (os.path.join(PATH_LABELS, "clickable_play_for_me_label.png")), (650, 550))
+        self.deck_label = ClickableLabel( os.path.join(PATH_LABELS, "deck_label.png"), os.path.join(PATH_LABELS,"clickable_deck_label.png"), (WINDOW_WIDTH/2,WINDOW_HEIGHT/2), 0.1)
+        self.game_pass_label = ClickableLabel(os.path.join(PATH_LABELS, "game_pass_label.png"), os.path.join(PATH_LABELS,"clickable_game_pass_label.png"),
+                                             (50, 550),2)  # Position the label horizontally at the bottom
+        self.draw_card_label = ClickableLabel(os.path.join(PATH_LABELS,"draw_card_label.png"), os.path.join(PATH_LABELS,"clickable_draw_card_label.png"),
+                                             (200, 550),2)
+        self.discard_label = ClickableLabel(os.path.join(PATH_LABELS,"discard_label.png"), os.path.join(PATH_LABELS,"clickable_discard_label.png"), (350, 550),2)
+        self.play_for_me_label = ClickableLabel(os.path.join(PATH_LABELS,"play_for_me_label.png"),
+                                                os.path.join(PATH_LABELS,"clickable_play_for_me_label.png"), (650, 550),2)
 
         # Add the clickable labels to the objects list
+        self.objects.append(self.deck_label)
         self.objects.append(self.game_pass_label)
         self.objects.append(self.draw_card_label)
         self.objects.append(self.discard_label)
