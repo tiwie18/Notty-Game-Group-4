@@ -48,8 +48,15 @@ class RenderableImage(VisualObject):
     def __init__(self, image_src, position2d=(0, 0), scale2d=(1, 1), rotation2d=(1, 0), alpha = 255):
         super().__init__(position2d=position2d, scale2d=scale2d, rotation2d=rotation2d, alpha=alpha)
         self.image_src = image_src
-        self.image = pygame.image.load(image_src).convert_alpha()
+        # self.image = pygame.image.load(image_src).convert_alpha()
+        self._cached_src_image_dict = {}
         self._store_cache()
+
+    @property
+    def image(self):
+        if self.image_src not in self._cached_src_image_dict.keys():
+            self._update_cache_if_dirty()
+        return self._cached_src_image_dict[self.image_src]
 
     def _transform_image(self):
         # basically follows the order of SQT scale->rotation->translation
@@ -89,15 +96,18 @@ class RenderableImage(VisualObject):
     # cache the transformed image so that it won't be resampled every frame
     def _store_cache(self):
         self._cached_image_src = self.image_src
+        if self.image_src not in self._cached_src_image_dict.keys():
+            self._cached_src_image_dict[self.image_src] = pygame.image.load(self.image_src).convert_alpha()
         self._cached_transformed_image = self._transform_image()
         self._cached_size2d = self._size2d()
         self._cached_rotation2d = self.rotation2d
         self._cached_alpha = self.alpha
 
+
     # when properties changed e.g. scale or the whole image src, it requires a resample, which means update the cache
     def _update_cache_if_dirty(self):
         if self.image_src != self._cached_image_src:
-            self.image = pygame.image.load(self.image_src)
+            # self.image = pygame.image.load(self.image_src)
             self._store_cache()
         elif self._cached_size2d != self._size2d() or self.rotation2d != self._cached_rotation2d or self.alpha != self._cached_alpha:
             self._store_cache()
@@ -109,6 +119,7 @@ class RenderableImage(VisualObject):
 
     def update(self):
         pass
+
 
 
 class Background(VisualObject):
