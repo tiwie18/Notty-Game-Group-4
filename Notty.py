@@ -16,7 +16,7 @@ current_screen = None
 PATH_CARDS = r"resources/images/cards/"
 PATH_LABELS = r"resources/images/ui/labels/"
 PATH_UI = r"resources/images/ui/"
-PATH_SCREEN = r"resources/images/screen/"
+PATH_SCREEN = r"resources/images/ui/screen/"
 PATH_START_SCREEN = r"resources/images/StartScreenObject"
 
 def change_screen(screen_instance):
@@ -331,10 +331,12 @@ class Card(RenderableImage):
 
     @staticmethod
     def calc_image_src(color, number):
-        filename = f"cards/{color}_{number}.png"
-        if os.path.exists(filename):
-            return f"cards/{color}_{number}.png"
-        return 'cards/default.png'
+        global PATH_CARDS
+        filename = f"{color}_{number}.png"
+        filepath = os.path.join(PATH_CARDS, filename)
+        if os.path.exists(filepath):
+            return filepath
+        return os.path.join(PATH_CARDS, "default.png")
 
     @staticmethod
     def calc_orientation_rotation(orientation):
@@ -424,6 +426,7 @@ class ScreenBase:
                 self.background_image = pygame.transform.scale(self.background_image,
                                                                (800, 600))  # Scale to screen size
             else:
+                raise FileNotFoundError(f"Warning: Background image {background_filename} not found.")
                 print(f"Warning: Background image {background_filename} not found.")
                 self.background_image = None
         else:
@@ -458,7 +461,8 @@ class ScreenBase:
 class StartScreen(ScreenBase):
     def __init__(self):
         """Initialize the StartScreen with the background image and some objects."""
-        super().__init__(background_filename="screens/StartScreen.png")  # Set the background to 'startscreen.png'
+        global PATH_SCREEN
+        super().__init__(background_filename = os.path.join(PATH_SCREEN, "StartScreen.png"))  # Set the background to 'startscreen.png'
 
         # Track the time when the StartScreen was shown
         self.start_time = pygame.time.get_ticks()  # Get the current time in milliseconds
@@ -481,7 +485,8 @@ class StartScreen(ScreenBase):
 class HomeScreen(ScreenBase):
     def __init__(self):
         """Initialize the HomeScreen with the background and clickable labels."""
-        super().__init__(background_filename="screens/HomeScreen.png")  # Set background for the home screen
+        global PATH_SCREEN
+        super().__init__(background_filename= os.path.join(PATH_SCREEN, "HomeScreen.png"))  # Set background for the home screen
 
         # Define the font for labels
         font = pygame.font.Font(None, 40)
@@ -505,13 +510,15 @@ class HomeScreen(ScreenBase):
 class RuleScreen(ScreenBase):
     def __init__(self):
         """Initialize the RuleScreen with the background image rulescreen.png."""
-        super().__init__(background_filename="screens/rulescreen.png")
+        global PATH_SCREEN
+        super().__init__(background_filename= os.path.join(PATH_SCREEN, "rulescreen.png", ))
 
 
 class StartGameScreen(ScreenBase):
     def __init__(self):
         """Initialize the StartGameScreen with the background image startgamescreen.png."""
-        super().__init__(background_filename="screens/StartGameScreen.png")  # Set background for the start game screen
+        global PATH_SCREEN
+        super().__init__(background_filename= os.path.join(PATH_SCREEN, "StartGameScreen.png"))  # Set background for the start game screen
 
         global PATH_LABELS
         # Add clickable labels for the player selection
@@ -527,7 +534,8 @@ class StartGameScreen(ScreenBase):
 class PlayScreen(ScreenBase):
     def __init__(self, num_players):
         # Initialize the PlayScreen with a specific background
-        super().__init__(background_filename='screens/PlayScreen.png')
+        global PATH_SCREEN
+        super().__init__(background_filename= os.path.join(PATH_SCREEN, 'PlayScreen.png'))
 
         # Create player objects and add them to the screen
         self.num_players = num_players
