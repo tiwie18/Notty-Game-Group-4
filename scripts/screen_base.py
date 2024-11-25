@@ -43,3 +43,8 @@ class ScreenBase:
         """Handle mouseup events."""
         for o in self.objects:
             o.mouseup(event)
+
+import scripts.global_variables as global_variables
+
+def change_screen(screen_instance):
+    global_variables.current_screen = screen_instance

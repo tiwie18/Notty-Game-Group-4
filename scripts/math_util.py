@@ -9,19 +9,16 @@ def calc_normalized_rotation(rotation2d):
     ratio = 1 / math.sqrt(sq_sum)
     return rotation2d[0] * ratio, rotation2d[1] * ratio
 
-
 def rotation_to_euler_angle(rotation2d):
     # y first
     rad = math.atan2(rotation2d[1], rotation2d[0])
     return math.degrees(rad)
-
 
 def euler_angle_to_rotation(angle):
     rad = math.radians(angle)
     x = math.cos(rad)
     y = math.sin(rad)
     return x, y
-
 
 def vec_2d_plus(vec1, vec2):
     return vec1[0] + vec2[0], vec1[1] + vec2[1]

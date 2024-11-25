@@ -191,3 +191,11 @@ class ClickableLabel(Label):
 
     def add_click_listener(self, function):
         self.click_listener_list.append(function)
+
+
+def load_and_scale_image(image_path, scale_factor=0.2):
+    """Memuat gambar dan mengubah ukurannya berdasarkan scale_factor."""
+    img = pygame.image.load(image_path)
+    new_width = int(img.get_width() * scale_factor)
+    new_height = int(img.get_height() * scale_factor)
+    return pygame.transform.scale(img, (new_width, new_height))
