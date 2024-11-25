@@ -1,6 +1,7 @@
 import pygame
 from pygame.locals import *
 import random
+from enum import Enum
 import os
 import scripts.math_util as math_util
 
@@ -9,6 +10,9 @@ WINDOW_HEIGHT = 600
 
 game_over = False
 current_screen = None
+def change_screen(screen_instance):
+    global current_screen
+    current_screen = screen_instance
 
 
 def load_and_scale_image(image_path, scale_factor=0.2):
@@ -184,6 +188,7 @@ class ClickableLabel(Label):
         # self.img = self.img_normal
         # self.width = self.img.get_width()
         # self.height = self.img.get_height()
+        self.click_listener_list = []
 
     def is_inside(self, pos):
         return self.pos[0] <= pos[0] <= self.pos[0] + self.width and \
@@ -200,7 +205,11 @@ class ClickableLabel(Label):
             self.click()
 
     def click(self):
-        pass
+        for listener in self.click_listener_list:
+            listener()
+
+    def add_click_listener(self, function):
+        self.click_listener_list.append(function)
 
 
 class PlayGameLabel(ClickableLabel):
@@ -514,9 +523,13 @@ class HomeScreen(ScreenBase):
         font = pygame.font.Font(None, 40)
 
         # Create the clickable labels with positions (already defined classes)
-        self.play_label = PlayGameLabel("labels/play_game_label.png", "labels/clickable_play_game_label.png",
-                                        (400, 200))
-        self.rules_label = RulesLabel("labels/rules_label.png", "labels/clickable_rules_label.png", (400, 275))
+        # self.play_label = PlayGameLabel("labels/play_game_label.png", "labels/clickable_play_game_label.png",(400, 200))
+        self.play_label = ClickableLabel("labels/play_game_label.png", "labels/clickable_play_game_label.png",
+                                        (400, 200), 0.2)
+        self.play_label.add_click_listener(lambda : change_screen(StartGameScreen()))
+        # self.rules_label = RulesLabel("labels/rules_label.png", "labels/clickable_rules_label.png", (400, 275))
+        self.rules_label = ClickableLabel("labels/rules_label.png", "labels/clickable_rules_label.png", (400, 275))
+        self.rules_label.add_click_listener(lambda : change_screen(RuleScreen()))
         self.exit_label = ExitGameLabel("labels/exit_label.png", "labels/clickable_exit_label.png", (400, 350))
 
         # Add labels to the screen objects list
