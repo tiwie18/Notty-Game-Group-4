@@ -1,3 +1,5 @@
+from pickle import GLOBAL
+
 import pygame
 from pygame.locals import *
 import random
@@ -10,6 +12,13 @@ WINDOW_HEIGHT = 600
 
 game_over = False
 current_screen = None
+
+PATH_CARDS = r"resources/images/cards/"
+PATH_LABELS = r"resources/images/ui/label/"
+PATH_UI = r"resources/images/ui/"
+PATH_SCREEN = r"resources/images/screen/"
+PATH_START_SCREEN = r"resources/images/StartScreenObject"
+
 def change_screen(screen_instance):
     global current_screen
     current_screen = screen_instance
@@ -56,6 +65,8 @@ class RenderableImage(VisualObject):
     '''
     def __init__(self, image_src, position2d=(0, 0), scale2d=(1, 1), rotation2d=(1, 0), alpha = 255):
         super().__init__(position2d=position2d, scale2d=scale2d, rotation2d=rotation2d, alpha=alpha)
+        if not os.path.exists(image_src):
+            raise FileNotFoundError(image_src)
         self.image_src = image_src
         # self.image = pygame.image.load(image_src).convert_alpha()
         self._cached_src_image_dict = {}
@@ -521,16 +532,16 @@ class HomeScreen(ScreenBase):
 
         # Define the font for labels
         font = pygame.font.Font(None, 40)
-
+        global PATH_LABELS
         # Create the clickable labels with positions (already defined classes)
         # self.play_label = PlayGameLabel("labels/play_game_label.png", "labels/clickable_play_game_label.png",(400, 200))
-        self.play_label = ClickableLabel("labels/play_game_label.png", "labels/clickable_play_game_label.png",
+        self.play_label = ClickableLabel(os.path.join(PATH_LABELS, "play_game_label.png"), os.path.join(PATH_LABELS, "clickable_play_game_label.png"),
                                         (400, 200), 0.2)
         self.play_label.add_click_listener(lambda : change_screen(StartGameScreen()))
         # self.rules_label = RulesLabel("labels/rules_label.png", "labels/clickable_rules_label.png", (400, 275))
-        self.rules_label = ClickableLabel("labels/rules_label.png", "labels/clickable_rules_label.png", (400, 275))
+        self.rules_label = ClickableLabel(os.path.join(PATH_LABELS, "rules_label.png"), os.path.join(PATH_LABELS,"clickable_rules_label.png"), (400, 275))
         self.rules_label.add_click_listener(lambda : change_screen(RuleScreen()))
-        self.exit_label = ExitGameLabel("labels/exit_label.png", "labels/clickable_exit_label.png", (400, 350))
+        self.exit_label = ExitGameLabel(os.path.join(PATH_LABELS, "exit_label.png"), os.path.join(PATH_LABELS, "clickable_exit_label.png"), (400, 350))
 
         # Add labels to the screen objects list
         self.objects.append(self.play_label)
@@ -549,9 +560,10 @@ class StartGameScreen(ScreenBase):
         """Initialize the StartGameScreen with the background image startgamescreen.png."""
         super().__init__(background_filename="screens/StartGameScreen.png")  # Set background for the start game screen
 
+        global PATH_LABELS
         # Add clickable labels for the player selection
-        self.two_player_label = TwoPlayerLabel("labels/two_player.png", "labels/clickable_two_player.png", (200, 375))
-        self.three_player_label = ThreePlayerLabel("labels/three_player.png", "labels/clickable_three_player.png",
+        self.two_player_label = TwoPlayerLabel(os.path.join(PATH_LABELS, "two_player.png"), os.path.join(PATH_LABELS, "clickable_two_player.png"), (200, 375))
+        self.three_player_label = ThreePlayerLabel(os.path.join(PATH_LABELS, "three_player.png"), os.path.join(PATH_LABELS, "clickable_three_player.png"),
                                                    (590, 375))
 
         # Add the labels to the screen objects
@@ -602,15 +614,16 @@ class PlayScreen(ScreenBase):
         # Create the deck with face-down cards and add it to the objects list
         self.deck = Deck(80, 120, "cards/backside_card.png")  # Example position for the deck
         self.objects.append(self.deck)
+        global PATH_LABELS
 
         # Create the clickable labels for game actions
-        self.game_pass_label = ClickableLabel("labels/game_pass_label.png", "labels/clickable_game_pass_label.png",
+        self.game_pass_label = ClickableLabel(os.path.join(PATH_LABELS, "game_pass_label.png"), os.path.join(PATH_LABELS, "clickable_game_pass_label.png"),
                                              (50, 550),0.2)  # Position the label horizontally at the bottom
-        self.draw_card_label = ClickableLabel("labels/draw_card_label.png", "labels/clickable_draw_card_label.png",
+        self.draw_card_label = ClickableLabel(os.path.join(PATH_LABELS, "draw_card_label.png"), os.path.join(PATH_LABELS, "clickable_draw_card_label.png"),
                                              (200, 550),0.2)
-        self.discard_label = ClickableLabel("labels/discard_label.png", "labels/clickable_discard_label.png", (350, 550),0.2)
-        self.play_for_me_label = ClickableLabel("labels/play_for_me_label.png",
-                                                "labels/clickable_play_for_me_label.png", (650, 550))
+        self.discard_label = ClickableLabel(os.path.join(PATH_LABELS, "discard_label.png"), os.path.join("clickable_discard_label.png"), (350, 550),0.2)
+        self.play_for_me_label = ClickableLabel(os.path.join(PATH_LABELS, "play_for_me_label.png"),
+                                                (os.path.join(PATH_LABELS, "clickable_play_for_me_label.png")), (650, 550))
 
         # Add the clickable labels to the objects list
         self.objects.append(self.game_pass_label)
