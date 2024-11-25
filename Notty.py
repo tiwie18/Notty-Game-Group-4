@@ -276,8 +276,8 @@ class PlayForMeLabel(ClickableLabel):
 
 
 class GamePassLabel(ClickableLabel):
-    def __init__(self, game):
-        self.game = game
+    def __init__(self, image_path_1, image_path_2, pos, scale_factor=0.2):
+        super().__init__(image_path_1, image_path_2, pos, scale_factor=scale_factor)
 
     def click(self):
         pass
@@ -295,34 +295,37 @@ class ExitGameLabel(ClickableLabel):
         game_over = True
 
 
-class Card(VisualObject):
+class Card(RenderableImage):
     def __init__(self, x, y, color, number, orientation='normal', scale_factor=0.2):
+        super().__init__(Card.calc_image_src(color,number), (x,y), (scale_factor, scale_factor),Card.calc_orientation_rotation(orientation), 255)
         self.x = x
         self.y = y
         self.color = color
         self.number = number
         self.orientation = orientation  # 'normal', 'left', 'right', 'top'
-        self.image = self.load_image(color, number, scale_factor)  # Load image dynamically based on card color/number
-        self.image = self.adjust_orientation(self.image)  # Adjust card's orientation based on player position
+
+    @staticmethod
+    def calc_image_src(color, number):
+        filename = f"cards/{color}_{number}.png"
+        if os.path.exists(filename):
+            return f"cards/{color}_{number}.png"
+        return 'cards/default.png'
+
+    @staticmethod
+    def calc_orientation_rotation(orientation):
+        if orientation == 'left':
+            return math_util.euler_angle_to_rotation(90)
+        elif orientation == 'right':
+            return math_util.euler_angle_to_rotation(-90)
+        elif orientation == 'top':
+            return math_util.euler_angle_to_rotation(180)
+        else:
+            return math_util.euler_angle_to_rotation(0)
 
     def load_image(self, color, number):
         """Load the appropriate image based on the card's color and number."""
-        image_filename = f"cards/{color}_{number}.png"
-        if os.path.exists(image_filename):
-            return load_and_scale_image(image_filename, scale_factor)
-        else:
-            print(f"Warning: Image {image_filename} not found, using a default card image.")
-            return pygame.image.load('cards/default.png', scale_factor)
-
-    def adjust_orientation(self, image):
-        """Rotate the card based on its orientation ('normal', 'left', 'right', 'top')."""
-        if self.orientation == 'left':
-            return pygame.transform.rotate(image, 90)  # Rotate 90 degrees for left player
-        elif self.orientation == 'right':
-            return pygame.transform.rotate(image, -90)  # Rotate -90 degrees for right player
-        elif self.orientation == 'top':
-            return pygame.transform.rotate(image, 180)  # Rotate 180 degrees for top player
-        return image  # No rotation needed for normal (bottom player)
+        image_filename = Card.calc_image_src(color, number)
+        self.image_src = image_filename
 
     def update(self):
         """Update the card's position or other properties if needed."""
@@ -588,12 +591,12 @@ class PlayScreen(ScreenBase):
         self.objects.append(self.deck)
 
         # Create the clickable labels for game actions
-        self.game_pass_label = GamePassLabel("labels/game_pass_label.png", "labels/clickable_game_pass_label.png",
-                                             (50, 550))  # Position the label horizontally at the bottom
-        self.draw_card_label = DrawCardLabel("labels/draw_card_label.png", "labels/clickable_draw_card_label.png",
-                                             (200, 550))
-        self.discard_label = DiscardLabel("labels/discard_label.png", "labels/clickable_discard_label.png", (350, 550))
-        self.play_for_me_label = PlayForMeLabel("labels/play_for_me_label.png",
+        self.game_pass_label = ClickableLabel("labels/game_pass_label.png", "labels/clickable_game_pass_label.png",
+                                             (50, 550),0.2)  # Position the label horizontally at the bottom
+        self.draw_card_label = ClickableLabel("labels/draw_card_label.png", "labels/clickable_draw_card_label.png",
+                                             (200, 550),0.2)
+        self.discard_label = ClickableLabel("labels/discard_label.png", "labels/clickable_discard_label.png", (350, 550),0.2)
+        self.play_for_me_label = ClickableLabel("labels/play_for_me_label.png",
                                                 "labels/clickable_play_for_me_label.png", (650, 550))
 
         # Add the clickable labels to the objects list
