@@ -40,7 +40,7 @@ class HomeScreen(ScreenBase):
         # Create the clickable labels with positions (already defined classes)
         # self.play_label = PlayGameLabel("labels/play_game_label.png", "labels/clickable_play_game_label.png",(400, 200))
         self.play_label = ClickableLabel(os.path.join(configs.PATH_LABELS, "play_game_label.png"), os.path.join(configs.PATH_LABELS, "clickable_play_game_label.png"),
-                                        (400, 200), 0.2)
+                                        (0, 200), 0.2)
         self.play_label.add_click_listener(lambda : change_screen(StartGameScreen()))
         # self.rules_label = RulesLabel("labels/rules_label.png", "labels/clickable_rules_label.png", (400, 275))
         self.rules_label = ClickableLabel(os.path.join(configs.PATH_LABELS, "rules_label.png"), os.path.join(configs.PATH_LABELS,"clickable_rules_label.png"), (400, 275))

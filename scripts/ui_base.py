@@ -172,8 +172,8 @@ class ClickableLabel(Label):
         self.click_listener_list = []
 
     def is_inside(self, pos):
-        return self.pos[0] <= pos[0] <= self.pos[0] + self.width and \
-            self.pos[1] <= pos[1] <= self.pos[1] + self.height
+        return self.pos[0] - self.width * 0.5 <= pos[0] <= self.pos[0] + self.width * 0.5 and \
+            self.pos[1] - self.height * 0.5 <= pos[1] <= self.pos[1] + self.height * 0.5
 
     def update(self):
         if self.is_inside(pygame.mouse.get_pos()):
