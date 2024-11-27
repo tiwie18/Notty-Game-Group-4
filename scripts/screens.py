@@ -48,9 +48,9 @@ class HomeScreen(ScreenBase):
         self.exit_label = ExitGameLabel(os.path.join(configs.PATH_LABELS, "exit_label.png"), os.path.join(configs.PATH_LABELS, "clickable_exit_label.png"), (400, 350))
 
         # Add labels to the screen objects list
-        self.objects.append(self.play_label)
-        self.objects.append(self.rules_label)
-        self.objects.append(self.exit_label)
+        self.add_visual_object(self.play_label)
+        self.add_visual_object(self.rules_label)
+        self.add_visual_object(self.exit_label)
 
 
 class RuleScreen(ScreenBase):
@@ -70,8 +70,8 @@ class StartGameScreen(ScreenBase):
                                                    (590, 375))
 
         # Add the labels to the screen objects
-        self.objects.append(self.two_player_label)
-        self.objects.append(self.three_player_label)
+        self.add_visual_object(self.two_player_label)
+        self.add_visual_object(self.three_player_label)
 
 
 class PlayScreen(ScreenBase):
@@ -112,7 +112,7 @@ class PlayScreen(ScreenBase):
 
         # Add players to the screen
         for player in self.players:
-            self.objects.append(player)
+            self.add_visual_object(player)
 
         # Create the clickable labels for game actions
 
@@ -126,11 +126,11 @@ class PlayScreen(ScreenBase):
                                                 os.path.join(configs.PATH_LABELS,"clickable_play_for_me_label.png"), (650, 550),2)
 
         # Add the clickable labels to the objects list
-        self.objects.append(self.deck_label)
-        self.objects.append(self.game_pass_label)
-        self.objects.append(self.draw_card_label)
-        self.objects.append(self.discard_label)
-        self.objects.append(self.play_for_me_label)
+        self.add_visual_object(self.deck_label)
+        self.add_visual_object(self.game_pass_label)
+        self.add_visual_object(self.draw_card_label)
+        self.add_visual_object(self.discard_label)
+        self.add_visual_object(self.play_for_me_label)
 
 
 class CongratsScreen(ScreenBase):
@@ -142,8 +142,8 @@ class CongratsScreen(ScreenBase):
         self.exitgame_label = ExitGameLabel("labels/exit_label.png", "labels/clickable_exit_label.png", (350, 350))
 
         # Create the clickable labels with their image files and positions
-        self.objects.append(self.newgame_label)
-        self.objects.append(self.exitgame_label)
+        self.add_visual_object(self.newgame_label)
+        self.add_visual_object(self.exitgame_label)
 
     def keydown(self, event):
         """Handle keydown events, such as ESC for quitting the game."""
@@ -160,8 +160,8 @@ class LoseScreen(ScreenBase):
         self.exitgame_label = ExitGameLabel("labels/exit_label.png", "labels/clickable_exit_label.png", (350, 350))
 
         # Create the clickable labels with their image files and positions
-        self.objects.append(self.newgame_label)
-        self.objects.append(self.exitgame_label)
+        self.add_visual_object(self.newgame_label)
+        self.add_visual_object(self.exitgame_label)
 
     def keydown(self, event):
         """Handle keydown events, such as ESC for quitting the game."""

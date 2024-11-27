@@ -3,11 +3,12 @@ import os
 import scripts.math_util as math_util
 
 class VisualObject:
-    def __init__(self, position2d=(0, 0), scale2d=(1, 1), rotation2d=(1, 0), alpha = 255):
+    def __init__(self, position2d=(0, 0), scale2d=(1, 1), rotation2d=(1, 0), alpha = 255, z_index = 0):
         self.position2d = position2d
         self.scale2d = scale2d
         self.rotation2d = rotation2d
         self.alpha = alpha
+        self.z_index = z_index
         pass
 
     @property
@@ -162,13 +163,8 @@ class ClickableLabel(Label):
         super().__init__(image_path1, pos, scale_factor=scale_factor)
         self.image_path1 = image_path1  # pict for normal(without click)
         self.image_path2 = image_path2  # pict for hover
-        # self.img_normal = load_and_scale_image(self.image_path1, scale_factor)
-        # self.img_hover = load_and_scale_image(self.image_path2, scale_factor)
         self.img_src_normal = self.image_path1
         self.img_src_hover = self.image_path2
-        # self.img = self.img_normal
-        # self.width = self.img.get_width()
-        # self.height = self.img.get_height()
         self.click_listener_list = []
 
     def is_inside(self, pos):

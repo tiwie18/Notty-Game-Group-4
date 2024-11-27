@@ -19,6 +19,16 @@ class ScreenBase:
         else:
             self.background_image = None
 
+    def add_visual_object(self, obj):
+        # render queue
+        if hasattr(obj, 'z_index'):
+            current_render_queue_length = len(self.objects)
+            obj.z_index = current_render_queue_length  # append render queue
+            self.objects.append(obj)
+
+    def sort_render_queue(self):
+        self.objects.sort(key=lambda obj: obj.z_index)
+
     def draw(self, screen):
         """Draw the background image or solid color, and all objects."""
         if self.background_image is not None:
@@ -43,6 +53,9 @@ class ScreenBase:
         """Handle mouseup events."""
         for o in self.objects:
             o.mouseup(event)
+
+
+
 
 import scripts.global_variables as global_variables
 
