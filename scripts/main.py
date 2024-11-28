@@ -1,4 +1,7 @@
 import re
+import pygame
+import random
+from enum import Enum
 
 def verify_cards(string_list):
     checked_list = []
@@ -27,13 +30,75 @@ class Card:
     def __str__(self):
         return f'{self.colour} {self.number}'
 
-
 class CollectionOfCards:
-    def __init__(self, string_list):
+    def __init__(self):
         self.collection = []
-        for card_string in string_list:
-            color, number = card_string.split()
-            self.collection.append(Card(color, int(number)))
+
+    @property
+    def count(self):
+        return len(self.collection)
+
+    def push_cards(self, card_list):
+        self.collection += card_list
+
+    def push_card(self, card):
+        self.collection.append(card)
+
+    def pop_card(self, index = None):
+        if index is None:
+            return self.collection.pop()
+        return self.collection.pop(index)
+
+    def remove_card(self, card):
+        self.collection.remove(card)
+
+    def shuffle(self):
+        random.shuffle(self.collection)
+
+    @staticmethod
+    def static_is_valid_group(card_list):
+        card_count = len(card_list)
+        if card_count < 3:
+            return False
+        if len([card for card in card_list if card.number == 3 and card.colour == "green" ]) != 0:
+            print(card_list)
+
+        # case 1: same color
+        same_color_flag = True
+        for i in range(card_count-1):
+            if card_list[i].colour != card_list[i+1].colour:
+                same_color_flag = False
+                break
+        if same_color_flag:
+            # sort the list to check continuity
+            card_list.sort(key=lambda card: card.number)
+            consecutive_flag = True
+            for i in range(card_count - 1):
+                if card_list[i+1].number-card_list[i].number != 1:
+                    consecutive_flag = False
+                    break
+            return consecutive_flag
+
+        # case 2: same number
+        same_number_flag = True
+        for i in range(card_count-1):
+            if card_list[i].number != card_list[i+1].number:
+                same_number_flag = False
+                break
+        if not same_number_flag:
+            return False
+        if card_count > 4:
+            return False
+        # This part is better done with a Counter, but using a dictionary do not need to import another collection
+        # Using set is even a better choice, but list is not ideal because it produces O(x) Time complexity
+        # set and dictionary use hashing so the time complexity is generally O(1)
+        color_count_dict = {'red': 0, 'blue': 0, 'green': 0, 'yellow': 0}
+        for card in card_list:
+            if color_count_dict[card.colour] > 0:
+                # Once a colour is already detected, it returns false immediately because that means same colors
+                return False
+            color_count_dict[card.colour] = 1
+        return True
 
     def is_valid_group(self):
         # If they are of the same color, then all the numbers must be consecutive
@@ -184,7 +249,6 @@ class CollectionOfCards:
             return largest_valid_group
         return None
 
-
 # There are 2 possible solutions to this problem
 # one is to try to add every card in the deck to the collection of the first player,
 # and check whether a new valid group is formed (only need to check 1 color and 1 number)
@@ -287,12 +351,696 @@ def probability_of_valid_group(player_list):
     # print(card_deck)
     return effective_card_count / deck_count   # the final result
 
+class GameLogicActor:
+    def __init__(self, game_manager):
+        self.game_manager = game_manager
+        if game_manager != self:
+            game_manager.add_actor(self)
+
+    def send_request(self, job):
+        self.game_manager.receive_request(job)
+        return job
+
+    def start(self):
+        pass
+
+    def update(self, dt):
+        pass
+
+class PlayerOptions(Enum):
+    DRAW_START_5_CARDS = 0
+    START_DRAW_CARD_FROM_DECK = 1
+    DRAW_CARD_FROM_DECK = 2
+    END_DRAW_CARD_FROM_DECK = 3
+    START_TURN = 4
+    START_DRAW_FROM_OTHER_PLAYER = 5
+    DRAW_CARD_FROM_PLAYER = 6
+    END_DRAW_FROM_OTHER_PLAYER = 8
+    SELECT_CARD_FROM_COLLECTION = 9
+    DESELECT_CARD_FROM_COLLECTION = 10
+    DISPOSE_VALID_GROUP = 11
+    PASS = 12
+
+class PlayerInput:
+    def __init__(self):
+        self.player = None
+        self.active = False
+
+    def activate(self):
+        self.active = True
+
+    def deactivate(self):
+        self.active = False
+
+    def evaluate_situation_and_response(self):
+        pass
+
+class AIPlayerInput(PlayerInput):
+    def __init__(self):
+        super().__init__()
+        self.valid_group_memory = None
+        self.other_player_memory = None
+
+    def activate(self):
+        super().activate()
+        print("Player AI input activated")
+
+    def deactivate(self):
+        super().deactivate()
+        print("Player AI input deactivated")
+
+    def evaluate_situation_and_response(self):
+        if not self.active:
+            print("Player AI input is deactivated")
+            return
+        player_status = self.player.game_manager.get_player_status(self.player)
+        draw_from_other_player = random.choice([True, False])
+        if player_status.turn_end:
+            self.deactivate()
+        elif not player_status.draw_from_other_player_start and not player_status.start_draw_from_deck and draw_from_other_player and self.player.card_count() < 20:
+            players = self.player.game_manager.players
+            players.remove(self.player)
+            other_player = random.choice(players)
+            if other_player.card_count() <= 1:
+                players.remove(other_player)
+                if len(players) > 0:
+                    other_player = random.choice(players)
+            if other_player.card_count() <= 1:
+                self.player.pass_turn() # todo:
+            else:
+                self.player.start_draw_from_other_player(other_player)
+                self.other_player_memory = other_player
+        elif player_status.draw_from_other_player_start and not player_status.have_drawn_from_other_player:
+            other_player_card_count = self.other_player_memory.card_count()
+            random_number = random.randint(0, other_player_card_count - 1)
+            card = self.other_player_memory.card_at(random_number)
+            self.player.draw_from_other_player(self.other_player_memory, card)
+            print("player.draw_from_other_player(self.other_player_memory, card)")
+        elif not player_status.draw_from_other_player_end and player_status.have_drawn_from_other_player:
+            self.player.end_draw_from_other_player()
+        elif not player_status.start_draw_from_deck and not player_status.draw_from_other_player_start and not draw_from_other_player and self.player.card_count() < 20:
+            deck = self.player.game_manager.deck
+            if not deck.empty():
+                self.player.start_draw_from_deck()
+            else:
+                self.player.pass_turn()
+        elif player_status.start_draw_from_deck and not player_status.end_draw_from_deck:
+            if player_status.num_card_drawn_from_deck < 3 and self.player.card_count() < 20:
+                self.player.draw_card_from_deck()
+            else:
+                self.player.end_draw_card_from_deck()
+        elif self.valid_group_memory is None:
+            self.valid_group_memory = self.player.find_largest_valid_group()
+            if self.valid_group_memory is None:
+                self.player.pass_turn()
+            else:
+                self.player.select_card(self.valid_group_memory.pop())
+        elif self.valid_group_memory is not None:
+            if len(self.valid_group_memory) > 0:
+                self.player.select_card(self.valid_group_memory.pop())
+            elif self.player.selected_valid_group():
+                self.player.dispose_selected()
+                self.valid_group_memory = None
+            else:
+                print("This branch should not be executed")
+
+
+class PlayerAgent(GameLogicActor):
+    def __init__(self, game_manager, player_input):
+        super().__init__(game_manager)
+        self._collection = CollectionOfCards()
+        self.player_input = player_input
+        self._selected_card_set = set()
+
+        player_input.player = self
+
+    def card_count(self):
+        return self._collection.count
+
+    def push_card(self, card):
+        self._collection.push_card(card)
+
+    def mark_card_selected(self, card):
+        if card in self._collection.collection:
+            self._selected_card_set.add(card)
+            print(f"{card} was selected")
+        else:
+            raise KeyError(f"{card} not in collection!")
+
+    def card_at(self, index):
+        return self._collection.collection[index]
+
+    def pop_selected(self):
+        for card in self._selected_card_set:
+            self._collection.remove_card(card)
+            print(f"{card} was removed")
+        temp = self._selected_card_set
+        self._selected_card_set = set()
+        return list(temp)
+
+    def has_card(self,card):
+        return card in self._collection.collection
+
+    def pop_card(self, index):
+        self._collection.pop_card(index)
+
+    def remove_card(self, card):
+        self._collection.remove_card(card)
+
+    def selected_as_list(self):
+        return list(self._selected_card_set)
+
+    def have_selected(self, card):
+        return card in self._selected_card_set
+
+    def shuffle(self):
+        self._collection.shuffle()
+
+    def selected_valid_group(self):
+        return CollectionOfCards.static_is_valid_group(list(self._selected_card_set))
+
+    def find_largest_valid_group(self):
+        return self._collection.find_largest_valid_group()
+
+    def draw_start_cards(self):
+        deck = self.game_manager.deck
+        return self.send_request(PlayerDrawStartCardJob(deck, self, 0.3))
+
+    def start_turn(self):
+        return self.send_request(PlayerStartTurnJob(self))
+
+    def start_draw_from_deck(self):
+        return self.send_request(StartDrawCardFromDeckJob(self))
+
+    def draw_card_from_deck(self):
+        return self.send_request(DrawCardFromDeckJob(self))
+
+    def end_draw_card_from_deck(self):
+        return self.send_request(EndDrawCardFromDeckJob(self))
+
+    def select_card(self, card):
+        return self.send_request(SelectCardFromCollectionJob(self,card))
+
+    def dispose_selected(self):
+        return self.send_request(DiscardSelectedFromCollectionJob(self))
+
+    def pass_turn(self):
+        return self.send_request(EndTurnJob(self))
+
+    def start_draw_from_other_player(self, other_player):
+        return self.send_request(StartDrawCardFromOtherPlayerJob(self, other_player))
+
+    def draw_from_other_player(self, other_player, card):
+        return self.send_request(DrawFromOtherPlayerJob(self, other_player, card))
+
+    def end_draw_from_other_player(self):
+        return self.send_request(EndDrawFromOtherPlayerJob(self))
+
+    
+
+class DrawCardBuffer:
+    def __init__(self):
+        self._collection = CollectionOfCards()
+
+    def push_card(self, card):
+        if self._collection.count < 3:
+            self._collection.push_card(card)
+        else:
+            raise ValueError("Can't push more than 3 cards to buffer!")
+
+    def pop_all_cards(self):
+        cards = self._collection.collection
+        self._collection.collection = []
+        return cards
+
+    def full(self):
+        return self._collection.count >= 3
+
+class Deck:
+    def __init__(self):
+        self._collection = CollectionOfCards()
+        # card_name_list = [ f"{color}_{number}" for color in ['red', 'blue', 'green', 'yellow'] for number in range(1, 11) ]
+        for color in ['red', 'blue', 'green', 'yellow']:
+            for number in range(1, 11):
+                self._collection.push_card(Card(color, number))
+                self._collection.push_card(Card(color, number))
+        self._collection.shuffle()
+
+
+    def print_deck(self):
+        for card in self._collection.collection:
+            print(card)
+
+    def empty(self):
+        return self._collection.count == 0
+
+    def pop_card(self):
+        return self._collection.pop_card()
+
+    def push_card(self, card):
+        self._collection.push_card(card)
+
+    def push_cards(self, cards):
+        self._collection.push_cards(cards)
+
+    def shuffle(self):
+        print("shuffle deck")
+        self._collection.shuffle()
+
+class GameJob:
+    def __init__(self, function, duration = 0):
+        self._function = function
+        self._duration = duration
+        self._start_evoke_listener_list = []
+        self._end_evoke_listener_list = []
+        self._time_left = duration
+
+    def add_start_evoke_listener(self, function):
+        self._start_evoke_listener_list.append(function)
+
+    def add_end_evoke_listener(self, function):
+        self._end_evoke_listener_list.append(function)
+
+    def evoke(self):
+        self._function()
+        for listener in self._start_evoke_listener_list:
+            listener()
+
+    def end_evoke(self):
+        for listener in self._end_evoke_listener_list:
+            listener()
+
+    def update(self, dt):
+        self._time_left -= dt
+
+    def finished(self):
+        return self._time_left <= 0
+
+class PlayerGameJob(GameJob):
+    def __init__(self, player_option, player, function, duration = 0):
+        super().__init__(function, duration)
+        self.player_option = player_option
+        self.player = player
+
+def draw_start_card_wrapper(deck, player):
+    # python enclosure
+    def draw_card():
+        for i in range(5):
+            card = deck.pop_card()
+            print(f"player draw card: {card}")
+            player.push_card(card)
+    return draw_card
+
+def draw_card_from_deck_wrapper(deck, buffer):
+    def draw_card():
+        if not buffer.full():
+            card = deck.pop_card()
+            buffer.push_card(card)
+            print(f"player draw card to buffer: {card}")
+
+    return draw_card
+
+def add_card_in_buffer_wrapper(buffer, player):
+    def add_card():
+        cards = buffer.pop_all_cards()
+        for card in cards:
+            player.push_card(card)
+        print(f"{len(cards)} cards added from buffer: {buffer}")
+    return add_card
+
+def start_turn_wrapper(player):
+    def start_turn():
+        index = player.game_manager.players.index(player)
+        player.game_manager.player_turn = index
+        print(f"{index} player turn")
+    return start_turn
+
+def discard_selected_wrapper(player):
+    def discard_card():
+        cards = player.pop_selected()
+        deck = player.game_manager.deck
+        deck.push_cards(cards)
+        print(f"{cards} disposed from player: {player}")
+
+    return discard_card
+
+def start_draw_card_from_other_player_wrapper(other_player):
+    def start_draw_card():
+        other_player.shuffle()
+        print(f"start draw from other player {other_player}")
+    return start_draw_card
+
+def draw_card_from_other_player_wrapper(player, other_player, card):
+    def draw_card():
+        if other_player.has_card(card):
+            other_player.remove_card(card)
+            player.push_card(card)
+            print (f"player draw card from other player: {card}")
+        else:
+            raise KeyError("Card not in collection of other player")
+    return draw_card
+
+class PlayerDrawStartCardJob(PlayerGameJob):
+    def __init__(self, deck , player, duration = 1):
+        super().__init__(PlayerOptions.DRAW_START_5_CARDS, player, draw_start_card_wrapper(deck, player), duration = duration)
+        self.add_end_evoke_listener(lambda : player.game_manager.get_player_status(player).finish_start_5_card_draw())
+
+class PlayerStartTurnJob(PlayerGameJob):
+    def __init__(self, player, duration = 0.1):
+        super().__init__(PlayerOptions.START_TURN, player, start_turn_wrapper(player),
+                         duration=duration)
+        self.add_start_evoke_listener(lambda : player.game_manager.get_player_status(player).reset_turn())
+        self.add_end_evoke_listener(player.player_input.activate)
+        self.add_end_evoke_listener(player.player_input.evaluate_situation_and_response)
+        # todo: for AI, it should listen to the callback to get into moving
+
+class StartDrawCardFromDeckJob(PlayerGameJob):
+    def __init__(self, player, duration = 0.1):
+        super().__init__(PlayerOptions.START_DRAW_CARD_FROM_DECK, player, lambda : None, duration = duration)
+        self.add_start_evoke_listener(player.game_manager.get_player_status(player).start_draw_card_from_deck)
+        self.add_end_evoke_listener(player.player_input.evaluate_situation_and_response)
+
+class DrawCardFromDeckJob(PlayerGameJob):
+    def __init__(self, player, duration = 0.1):
+        deck = player.game_manager.deck
+        buffer = player.game_manager.draw_card_buffer
+        super().__init__(PlayerOptions.DRAW_CARD_FROM_DECK, player, draw_card_from_deck_wrapper(deck, buffer),duration)
+        self.add_start_evoke_listener(player.game_manager.get_player_status(player).draw_card_from_deck_to_buffer)
+        self.add_end_evoke_listener(player.player_input.evaluate_situation_and_response)
+
+class EndDrawCardFromDeckJob(PlayerGameJob):
+    def __init__(self, player, duration = 1):
+        buffer = player.game_manager.draw_card_buffer
+        super().__init__(PlayerOptions.END_DRAW_CARD_FROM_DECK, player, add_card_in_buffer_wrapper(buffer, player),duration)
+        self.add_start_evoke_listener(player.game_manager.get_player_status(player).end_draw_card_from_deck)
+        self.add_end_evoke_listener(player.player_input.evaluate_situation_and_response)
+
+class StartDrawCardFromOtherPlayerJob(PlayerGameJob):
+    def __init__(self, player, other_player, duration = 0.3):
+        super().__init__(PlayerOptions.START_DRAW_FROM_OTHER_PLAYER, player, start_draw_card_from_other_player_wrapper(other_player), duration)
+        self.add_start_evoke_listener(lambda : player.game_manager.get_player_status(player).start_draw_from_other_player(other_player)) #todo
+        self.add_end_evoke_listener(player.player_input.evaluate_situation_and_response)
+
+class DrawFromOtherPlayerJob(PlayerGameJob):
+    def __init__(self, player, other_player, card, duration = 0.3):
+        super().__init__(PlayerOptions.DRAW_CARD_FROM_PLAYER, player, draw_card_from_other_player_wrapper(player, other_player, card),duration)
+        self.add_start_evoke_listener(
+            lambda: player.game_manager.get_player_status(player).draw_from_other_player())
+        self.add_end_evoke_listener(player.player_input.evaluate_situation_and_response)
+
+class EndDrawFromOtherPlayerJob(PlayerGameJob):
+    def __init__(self, player, duration = 1):
+        super().__init__(PlayerOptions.END_DRAW_FROM_OTHER_PLAYER, player, (lambda : print('End draw from other player')),duration)
+        self.add_start_evoke_listener(player.game_manager.get_player_status(player).end_draw_from_other_player)
+        self.add_end_evoke_listener(player.player_input.evaluate_situation_and_response)
+
+class SelectCardFromCollectionJob(PlayerGameJob):
+    def __init__(self, player, card, duration = 0.1):
+        super().__init__(PlayerOptions.SELECT_CARD_FROM_COLLECTION, player, lambda : player.mark_card_selected(card), duration = duration)
+        self.add_start_evoke_listener(player.game_manager.get_player_status(player).start_select_valid_group)
+        self.add_end_evoke_listener(player.player_input.evaluate_situation_and_response)
+
+class DiscardSelectedFromCollectionJob(PlayerGameJob):
+    def __init__(self, player, duration = 1):
+        super().__init__(PlayerOptions.DISPOSE_VALID_GROUP, player, discard_selected_wrapper(player), duration=duration)
+        self.add_start_evoke_listener(player.game_manager.get_player_status(player).dispose_selected_valid_group)
+        self.add_start_evoke_listener(player.game_manager.deck.shuffle)
+        self.add_end_evoke_listener(player.player_input.evaluate_situation_and_response)
+        
+class EndTurnJob(PlayerGameJob):
+    def __init__(self, player, duration = 1):
+        super().__init__(PlayerOptions.PASS, player, player.game_manager.get_player_status(player).end_turn, duration = duration)
+        self.add_start_evoke_listener(player.player_input.deactivate)
+        self.add_end_evoke_listener(player.game_manager.start_next_player_turn)
 
 
 
+class JobEvokeSystem:
+    def __init__(self):
+        import queue
+        self._job_queue = queue.Queue()
+        self._current_job = None
+
+    def push_job(self, job):
+        self._job_queue.put(job)
+
+    def update(self, dt):
+        if self._current_job is not None:
+            self._current_job.update(dt)
+            if self._current_job.finished():
+                self._current_job.end_evoke()
+                self._current_job = None
+        if self._current_job is None:
+            while not self._job_queue.empty():
+                self._current_job = self._job_queue.get()
+                self._current_job.evoke()
+                if self._current_job.finished():
+                    self._current_job.end_evoke()
+                    self._current_job = None
+                else:
+                    break
+
+class GamePlayerStatus:
+
+    def __init__(self, player):
+        self._player = player
+        self._start_5_card_drawn = False
+        self._turn_end = True
+
+        self._start_draw_from_deck = False
+        self._num_card_drawn_from_deck = 0
+        self._end_draw_from_deck = False
+
+        self._start_draw_from_other_player = False
+        self._draw_from_other_player = False
+        self._other_player = None
+        self._end_draw_from_other_player = False
+
+        self._start_select_valid_group = False
+        self._end_select_valid_group = False
+
+    @property
+    def num_card_drawn_from_deck(self):
+        return self._num_card_drawn_from_deck
+
+    @property
+    def turn_end(self):
+        return self._turn_end
+
+    @property
+    def start_draw_from_deck(self):
+        return self._start_draw_from_deck
+
+    @property
+    def end_draw_from_deck(self):
+        return self._end_draw_from_deck
+
+    @property
+    def draw_from_other_player_start(self):
+        return self._start_draw_from_other_player
+
+    @property
+    def have_drawn_from_other_player(self):
+        return self._draw_from_other_player
+
+    @property
+    def draw_from_other_player_end(self):
+        return self._end_draw_from_other_player
+
+    def finish_start_5_card_draw(self):
+        self._start_5_card_drawn = True
+        print ("Player Finished Start Draw In Status")
+
+    def reset_turn(self):
+        self._turn_end = False
+
+        self._start_draw_from_deck = False
+        self._num_card_drawn_from_deck = 0
+        self._end_draw_from_deck = False
+
+        self._start_draw_from_other_player = False
+        self._draw_from_other_player = False
+        self._other_player = None
+        self._end_draw_from_other_player = False
+
+        self._start_select_valid_group = False
+        self._end_select_valid_group = False
+
+    def end_turn(self):
+        self._turn_end = True
+
+    def start_draw_card_from_deck(self):
+        self._start_draw_from_deck = True
+
+    def draw_card_from_deck_to_buffer(self):
+        self._num_card_drawn_from_deck += 1
+
+    def end_draw_card_from_deck(self):
+        self._end_draw_from_deck = True
+
+    def start_select_valid_group(self):
+        self._start_select_valid_group = True
+
+    def dispose_selected_valid_group(self):
+        self._start_select_valid_group = True
+
+    def start_draw_from_other_player(self, other_player):
+        self._start_draw_from_other_player = True
+        self._other_player = other_player
+
+    def draw_from_other_player(self):
+        self._draw_from_other_player = True
+
+    def end_draw_from_other_player(self):
+        self._end_draw_from_other_player = True
+
+    @property
+    def player(self):
+        return self._player
+
+    def check_player_job_valid(self, player_game_job):
+        if isinstance(player_game_job, PlayerDrawStartCardJob):
+            return not self._start_5_card_drawn
+        if isinstance(player_game_job, PlayerStartTurnJob):
+            player = player_game_job.player
+            game_manager = player.game_manager
+            players = game_manager.players
+            if game_manager.player_turn < 0:
+                return True
+            player_index = players.index(player)
+            if (game_manager.player_turn + 1) % len(players) == player_index:
+                curr_player = players[game_manager.player_turn]
+                if game_manager.get_player_status(curr_player).turn_end:
+                    return True
+            return False
+        if isinstance(player_game_job, StartDrawCardFromDeckJob):
+            return (not self._start_draw_from_deck) and (not self._start_draw_from_other_player)
+        if isinstance(player_game_job, DrawCardFromDeckJob):
+            if self._start_draw_from_deck and not self._end_draw_from_deck:
+                if self._num_card_drawn_from_deck < 3:
+                    return True
+            return False
+        if isinstance(player_game_job, EndDrawCardFromDeckJob):
+            if self._start_draw_from_deck and not self._end_draw_from_deck:
+                return True
+            return False
+        if isinstance(player_game_job, StartDrawCardFromOtherPlayerJob):
+            return (not self._start_draw_from_deck) and (not self._start_draw_from_other_player)
+        if isinstance(player_game_job, DrawFromOtherPlayerJob):
+            return self._start_draw_from_other_player and (not self._draw_from_other_player) and self._other_player.card_count() > 0
+        if isinstance(player_game_job, EndDrawFromOtherPlayerJob):
+            return self._draw_from_other_player and (not self._end_draw_from_other_player)
+        if isinstance(player_game_job, SelectCardFromCollectionJob):
+            return True
+        if isinstance(player_game_job, DiscardSelectedFromCollectionJob):
+            player = player_game_job.player
+            selected_as_list = player.selected_as_list()
+            return CollectionOfCards.static_is_valid_group(selected_as_list)
+        if isinstance(player_game_job, EndTurnJob):
+            return True
+        return False
+
+class GameProcedure(Enum):
+    GAME_START = 0
+    PLAYING = 1
+    WON = 2
+    LOSE = 3
+
+class GameManager(GameLogicActor):
+    def __init__(self, game_instance):
+        super().__init__(self)
+        self._player_status_dict = {}
+        self._deck = Deck()
+        self._draw_card_buffer = DrawCardBuffer()
+        self._job_manager = JobEvokeSystem()
+        self.game_procedure = GameProcedure.GAME_START
+        self.game_instance = game_instance
+        self.player_turn = -1
+        game_instance.add_actor(self)
+
+    @property
+    def deck(self):
+        return self._deck
+
+    @property
+    def players(self):
+        return [player for player in self._player_status_dict.keys()]
+
+    @property
+    def draw_card_buffer(self):
+        return self._draw_card_buffer
+
+    def get_player_status(self, player):
+        return self._player_status_dict[player]
+
+    def add_player(self, player):
+        self._player_status_dict[player] = GamePlayerStatus(player)
+
+    def add_actor(self, actor):
+        self.game_instance.add_actor(actor)
+
+    def receive_request(self, job):
+        if self.check_request(job):
+            self._job_manager.push_job(job)
+            # todo : change status when it starts
+        else:
+            print(type(job))
+            print("denied")
+
+    def check_request(self, job):
+        # todo : some requests are not acceptable
+        if isinstance(job, PlayerGameJob):
+            player = job.player
+            status = self._player_status_dict[player]
+            return status.check_player_job_valid(job)
+        return True
+
+    def start(self):
+        print("start")
+        player_1 = PlayerAgent(self, AIPlayerInput())
+        player_2 = PlayerAgent(self, AIPlayerInput())
+        player_3 = PlayerAgent(self, AIPlayerInput())
+        self.add_player(player_1)
+        self.add_player(player_2)
+        self.add_player(player_3)
+        job1 = player_1.draw_start_cards()
+        job2 = player_2.draw_start_cards()
+        job3 = player_3.draw_start_cards()
+        job3.add_end_evoke_listener(self.start_next_player_turn)
+
+    def update(self, dt):
+        self._job_manager.update(dt)
+
+    def start_next_player_turn(self):
+        next_player_index = (self.player_turn + 1) % len(self._player_status_dict)
+        player = self.players[next_player_index]
+        player.start_turn()
+
+class Game:
+    def __init__(self):
+        self.clock = pygame.time.Clock()
+        self.update_object_set = set()
+        self.game_end = False
+        self.game_manager = GameManager(self)
+
+    def add_actor(self, game_logic_actor):
+        if game_logic_actor not in self.update_object_set:
+            self.update_object_set.add(game_logic_actor)
+            game_logic_actor.start()
+
+    def main(self):
+        dt = self.clock.tick(60)/1000
+        while not self.game_end:
+            for o in self.update_object_set:
+                o.update(dt)
+            pygame.time.delay(30)
 
 if __name__ == "__main__":
-    c = CollectionOfCards(["red 5", "red 7", "red 9"])
-    c2 = CollectionOfCards(["red 6", "red 8"])
-    candidate_card_list = probability_of_valid_group([c, c2])
-    print(candidate_card_list)
+    Game().main()
+    #deck = Deck()
+    #deck.print_deck()
+
+    # c = CollectionOfCards(["red 5", "red 7", "red 9"])
+    # c2 = CollectionOfCards(["red 6", "red 8"])
+    # candidate_card_list = probability_of_valid_group([c, c2])
+    # print(candidate_card_list)
