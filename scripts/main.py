@@ -20,7 +20,6 @@ def verify_cards(string_list):
         checked_list.append(card_string)
     return True
 
-
 class Card:
     def __init__(self, colour, number):
         assert isinstance(number, int)
@@ -249,14 +248,6 @@ class CollectionOfCards:
             return largest_valid_group
         return None
 
-# There are 2 possible solutions to this problem
-# one is to try to add every card in the deck to the collection of the first player,
-# and check whether a new valid group is formed (only need to check 1 color and 1 number)
-# another is to find all the qualified cards beforehand, and calculate the portion of these cards in the deck
-# In some cases the second one is more sufficient
-# for example, Player 1 have 2 card in his collection, I only have to check whether there is a card in the middle or
-# of the same number but different colors, in which case I only need to search 3 unique cards in the deck,
-# but using the first method will still check all the cards in the deck
 def probability_of_valid_group(player_list):
     p0_card_list = player_list[0].collection
     # now I start to use set
@@ -464,7 +455,6 @@ class AIPlayerInput(PlayerInput):
             else:
                 print("This branch should not be executed")
 
-
 class PlayerAgent(GameLogicActor):
     def __init__(self, game_manager, player_input):
         super().__init__(game_manager)
@@ -555,8 +545,6 @@ class PlayerAgent(GameLogicActor):
 
     def end_draw_from_other_player(self):
         return self.send_request(EndDrawFromOtherPlayerJob(self))
-
-    
 
 class DrawCardBuffer:
     def __init__(self):
@@ -772,8 +760,6 @@ class EndTurnJob(PlayerGameJob):
         super().__init__(PlayerOptions.PASS, player, player.game_manager.get_player_status(player).end_turn, duration = duration)
         self.add_start_evoke_listener(player.player_input.deactivate)
         self.add_end_evoke_listener(player.game_manager.start_next_player_turn)
-
-
 
 class JobEvokeSystem:
     def __init__(self):
