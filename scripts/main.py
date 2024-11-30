@@ -1071,6 +1071,8 @@ class GamePlayerStatus:
                     return True
             return False
         if isinstance(player_game_job, StartDrawCardFromDeckJob):
+            print(
+                f"start: {self._start_draw_from_deck}, other: {self._start_draw_from_other_player}")
             return (not self._start_draw_from_deck) and (not self._start_draw_from_other_player)
         if isinstance(player_game_job, DrawCardFromDeckJob):
             if self._start_draw_from_deck and not self._end_draw_from_deck:
