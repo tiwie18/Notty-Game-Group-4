@@ -1,54 +1,1956 @@
-from pickle import GLOBAL
-
 import pygame
 from pygame.locals import *
 import random
 from enum import Enum
 import os
-import scripts.configs as configs
-from scripts.ui_base import *
-from scripts.screen_base import *
-from scripts.screens import *
-import scripts.global_variables as global_variables
 import scripts.math_util as math_util
+import scripts.main as core
+
+# Create __init__.py in the scripts directory if it doesn't exist
+scripts_dir = os.path.join(os.getcwd(), 'scripts')
+init_file = os.path.join(scripts_dir, '__init__.py')
+
+if not os.path.exists(init_file):
+    with open(init_file, 'w') as f:
+        pass  # Create an empty file
+
+print(f"Created {init_file}")
+
+WINDOW_WIDTH = 800
+WINDOW_HEIGHT = 600
+
+# Card spacing constants
+CARD_WIDTH = 80
+CARD_HEIGHT = 120
+HORIZONTAL_SPACING = 30  # Space between cards horizontally
+VERTICAL_SPACING = 20  # Space between cards vertically
+STACK_OFFSET = 15  # Offset for stacked cards
+
+game_over = False
+current_screen = None
 
 
-# Main game loop
+def change_screen(screen_instance):
+    global current_screen
+    current_screen = screen_instance
+
+
+def load_and_scale_image(image_path, scale_factor=0.2):
+    """Memuat gambar dan mengubah ukurannya berdasarkan scale_factor."""
+    img = pygame.image.load(image_path)
+    new_width = int(img.get_width() * scale_factor)
+    new_height = int(img.get_height() * scale_factor)
+    return pygame.transform.scale(img, (new_width, new_height))
+
+
+class VisualObject:
+    def __init__(self, position2d=(0, 0), scale2d=(1, 1), rotation2d=(1, 0), alpha=255):
+        self.position2d = position2d
+        self.scale2d = scale2d
+        self.rotation2d = rotation2d
+        self.alpha = alpha
+        pass
+
+    @property
+    def euler_angle(self):
+        return math_util.rotation_to_euler_angle(self.rotation2d)
+
+    @euler_angle.setter
+    def euler_angle(self, value):
+        value = math_util.euler_angle_to_rotation(value)
+        self.rotation2d = value
+
+    def draw(self, screen):
+        pass
+
+    def update(self):
+        pass
+
+    def mouseup(self, event):
+        pass
+
+
+class RenderableImage(VisualObject):
+    '''
+    A class that provide basic rendering functionality for images along with transformation (position, scale, rotation)
+    '''
+
+    def __init__(self, image_src, position2d=(0, 0), scale2d=(1, 1), rotation2d=(1, 0), alpha=255):
+        super().__init__(position2d=position2d, scale2d=scale2d, rotation2d=rotation2d, alpha=alpha)
+        self.image_src = image_src
+        self._cached_src_image_dict = {}
+        self._store_cache()
+
+    @property
+    def image(self):
+        if self.image_src not in self._cached_src_image_dict.keys():
+            self._update_cache_if_dirty()
+        return self._cached_src_image_dict[self.image_src]
+
+    def _transform_image(self):
+        # basically follows the order of SQT scale->rotation->translation
+        size2d = self._size2d()
+        scale2d = self.scale2d
+        original_size2d = self.image.get_size()
+        # this is a simple super sampler anti-aliasing
+        # rotation will severely corrupt the original image sample result, so do the pre scale before it is rotated
+        preprocess_size2d = original_size2d
+        if scale2d[0] > scale2d[1]:  # the original picture is not that long
+            target_length = original_size2d[0] * scale2d[0] / scale2d[1]
+            preprocess_size2d = (target_length, original_size2d[1])
+        elif scale2d[0] < scale2d[1]:  # the original picture is not that high
+            target_height = original_size2d[1] * scale2d[1] / scale2d[0]
+            preprocess_size2d = (original_size2d[0], target_height)
+        # point scale, also known as 1d scale
+        scale_ratio = size2d[1] / preprocess_size2d[1]
+        # in the following step we get the super sampled picture
+        transformed_image = pygame.transform.scale(self.image, preprocess_size2d)
+        angle = math_util.rotation_to_euler_angle(self.rotation2d)
+        transformed_image = pygame.transform.rotate(transformed_image, angle)
+        rect = transformed_image.get_rect()
+        # finally scale the image to given size
+        transformed_image = pygame.transform.smoothscale(transformed_image,
+                                                         (rect.width * scale_ratio, rect.height * scale_ratio))
+        # t (not needed to be processed here)
+        transformed_image.set_alpha(self.alpha)
+        return transformed_image
+
+    # calculate the size using given scale. e.g. the original image is 100*100, scale (2,2) will make the size 200*200
+    # scale is always (1,1) when using the original size
+    def _size2d(self):
+        x = self.image.get_size()[0] * self.scale2d[0]
+        y = self.image.get_size()[1] * self.scale2d[1]
+        return x, y
+
+    # cache the transformed image so that it won't be resampled every frame
+    def _store_cache(self):
+        self._cached_image_src = self.image_src
+        if self.image_src not in self._cached_src_image_dict.keys():
+            self._cached_src_image_dict[self.image_src] = pygame.image.load(self.image_src).convert_alpha()
+        self._cached_transformed_image = self._transform_image()
+        self._cached_size2d = self._size2d()
+        self._cached_rotation2d = self.rotation2d
+        self._cached_alpha = self.alpha
+
+    # when properties changed e.g. scale or the whole image src, it requires a resample, which means update the cache
+    def _update_cache_if_dirty(self):
+        if self.image_src != self._cached_image_src:
+            self._store_cache()
+        elif self._cached_size2d != self._size2d() or self.rotation2d != self._cached_rotation2d or self.alpha != self._cached_alpha:
+            self._store_cache()
+
+    def draw(self, screen):
+        self._update_cache_if_dirty()
+        rect = self._cached_transformed_image.get_rect(center=self.position2d)
+        screen.blit(self._cached_transformed_image, rect.topleft)
+
+    def update(self):
+        pass
+
+
+class Label(RenderableImage):
+    # if it's image instead of text:
+    def __init__(self, image_path, pos, scale_factor=0.2):
+        super().__init__(image_path, pos, (scale_factor, scale_factor), (1, 0), 255)
+
+    @property
+    def image_path(self):
+        return self.image_src
+
+    @image_path.setter
+    def image_path(self, value):
+        self.image_src = value
+
+    @property
+    def pos(self):
+        return self.position2d
+
+    @pos.setter
+    def pos(self, pos):
+        self.position2d = pos
+
+    @property
+    def img(self):
+        return self._cached_transformed_image
+
+    @property
+    def width(self):
+        return self._size2d()[0]
+
+    @width.setter
+    def width(self, width):
+        scale_x = self.image.get_width() / width
+        scale_y = self.scale2d[1]
+        self.scale2d = (scale_x, scale_y)
+
+    @property
+    def height(self):
+        return self._size2d()[1]
+
+    @height.setter
+    def height(self, height):
+        scale_y = self.image.get_height() / height
+        scale_x = self.scale2d[0]
+        self.scale2d = (scale_x, scale_y)
+
+
+class ClickableLabel(Label):
+    def __init__(self, image_path1, image_path2, pos, scale_factor=0.2):
+        super().__init__(image_path1, pos, scale_factor)  # Pass scale_factor to parent
+        self.image_path1 = image_path1  # pict for normal(without click)
+        self.image_path2 = image_path2  # pict for hover
+        self.img_src_normal = self.image_path1
+        self.img_src_hover = self.image_path2
+        self.click_listener_list = []
+
+    def is_inside(self, pos):
+        return self.pos[0] - self.width * 0.5 <= pos[0] <= self.pos[0] + self.width * 0.5 and \
+            self.pos[1] - self.height * 0.5 <= pos[1] <= self.pos[1] + self.height * 0.5
+
+    def update(self):
+        if self.is_inside(pygame.mouse.get_pos()):
+            self.image_src = self.img_src_hover
+        else:
+            self.image_src = self.img_src_normal
+
+    def mouseup(self, event):
+        if event.button == 1 and self.is_inside(event.pos):
+            self.click()
+
+    def click(self):
+        for listener in self.click_listener_list:
+            listener()
+
+    def add_click_listener(self, function):
+        self.click_listener_list.append(function)
+
+
+class PlayGameLabel(ClickableLabel):
+    def click(self):
+        global current_screen
+        current_screen = StartGameScreen()
+
+
+class RulesLabel(ClickableLabel):
+    def click(self):
+        global current_screen
+        current_screen = RuleScreen()
+
+
+class SettingLabel(ClickableLabel):
+    def click(self):
+        global current_screen
+        current_screen = SettingScreen()
+
+
+class QuitGameLabel(ClickableLabel):
+    def click(self):
+        global current_screen
+        current_screen = HomeScreen()
+
+
+class BackLabel(ClickableLabel):
+    def click(self):
+        global current_screen
+        current_screen = HomeScreen()
+
+
+class TwoPlayerLabel(ClickableLabel):
+    def __init__(self, image_path1, image_path2, pos, scale_factor=0.2):
+        super().__init__(image_path1, image_path2, pos, scale_factor)
+        self.click_listener_list = []  # Initialize click listener list
+
+    def click(self):
+        """Handle click on two player button"""
+        global current_screen
+        print("Creating TwoPlayerScreen...")  # Debug print
+        current_screen = TwoPlayerScreen()
+
+
+class ThreePlayerLabel(ClickableLabel):
+    def __init__(self, image_path1, image_path2, pos, scale_factor=0.2):
+        super().__init__(image_path1, image_path2, pos, scale_factor)
+        self.click_listener_list = []  # Initialize click listener list
+
+    def click(self):
+        """Handle click on three player button"""
+        global current_screen
+        print("Creating ThreePlayerScreen...")  # Debug print
+        current_screen = ThreePlayerScreen()
+
+
+class DrawCardLabel(ClickableLabel):
+    def __init__(self, game):
+        self.game = game  # Reference to the PlayGame instance
+
+    def display_action_options(self):
+        choice = input("Choose action:\n1. Take a card from the opponent\n2. Draw cards from the deck\n")
+
+        if choice == '1':
+            self.game.take_card_from_opponent()
+        elif choice == '2':
+            self.game.draw_cards_from_deck()
+        else:
+            print("Invalid choice. Please choose again.")
+
+    def reset_turn(self):
+        self.game.reset_turn()
+
+
+class DiscardLabel(ClickableLabel):
+    def __init__(self, game):
+        self.game = game
+
+    def click(self):
+        self.game.discard_card()
+
+
+class PlayForMeLabel(ClickableLabel):
+    def __init__(self, game):
+        self.game = game
+
+    def click(self):
+        self.game.play_for_me()
+
+
+class GamePassLabel(ClickableLabel):
+    def __init__(self, image_path_1, image_path_2, pos, scale_factor=0.2):
+        super().__init__(image_path_1, image_path_2, pos, scale_factor=scale_factor)
+
+    def click(self):
+        pass
+
+
+class NewGameLabel(ClickableLabel):
+    def click(self):
+        global current_screen
+        current_screen = HomeScreen()
+
+
+class ExitGameLabel(ClickableLabel):
+    def click(self):
+        global game_over
+        game_over = True
+
+
+class DeckLabel(ClickableLabel):
+    def click(self):
+        global current_screen
+
+
+class Card(RenderableImage):
+    def __init__(self, color, number, position2d=(0, 0), scale2d=(0.15, 0.15), rotation2d=(1, 0)):
+        # For face-up cards
+        self.face_up_image = f"resources/images/cards/{color}_{number}.png"
+        # For face-down cards
+        self.face_down_image = "resources/images/cards/backside_card.png"
+        # Start with face-down image
+        image_path = self.face_down_image
+        self.logic_card = None
+
+        super().__init__(image_path, position2d, scale2d, rotation2d)
+        self.color = color
+        self.number = number
+        self.selected = False
+        self.highlighted = False
+        self.is_face_up = False
+        self.rect = pygame.Rect(position2d[0] - CARD_WIDTH / 2,
+                                position2d[1] - CARD_HEIGHT / 2,
+                                CARD_WIDTH, CARD_HEIGHT)
+
+    def flip(self):
+        """Flip the card face up/down"""
+        self.is_face_up = not self.is_face_up
+        self.image_src = self.face_up_image if self.is_face_up else self.face_down_image
+        # Force cache update
+        self._store_cache()
+
+    def set_face_up(self):
+        """Set the card to face up"""
+        if not self.is_face_up:
+            self.is_face_up = True
+            self.image_src = self.face_up_image
+            self._store_cache()
+
+    def set_face_down(self):
+        """Set the card to face down"""
+        if self.is_face_up:
+            self.is_face_up = False
+            self.image_src = self.face_down_image
+            self._store_cache()
+
+    def update_position(self, new_pos):
+        """Update both the display position and collision rect"""
+        self.position2d = new_pos
+        self.rect.x = new_pos[0] - CARD_WIDTH / 2
+        self.rect.y = new_pos[1] - CARD_HEIGHT / 2
+
+    def draw(self, screen):
+        if self.highlighted or self.selected:
+            # Create highlight surface
+            highlight = pygame.Surface((CARD_WIDTH + 8, CARD_HEIGHT + 8))
+            highlight.set_alpha(150)
+
+            if self.highlighted:
+                highlight.fill((147, 112, 219))  # Purple for opponent's card
+            else:
+                highlight.fill((255, 140, 0))  # Orange for selected card
+
+            # Draw highlight behind card
+            highlight_x = self.position2d[0] - (CARD_WIDTH + 8) / 2
+            highlight_y = self.position2d[1] - (CARD_HEIGHT + 8) / 2
+            screen.blit(highlight, (highlight_x, highlight_y))
+
+        super().draw(screen)
+
+    def contains_point(self, pos):
+        return self.rect.collidepoint(pos)
+
+
+class Player(core.IPlayerAgentListener):
+    def __init__(self, position, cards=None):
+        self.position = position  # 'bottom', 'top', 'left', or 'right'
+        self.cards = cards if cards else []
+        self.selected_cards = []
+        self._logic_player = None
+        self.game_state = None
+
+    @property
+    def logic_player(self):
+        return self._logic_player
+
+    @logic_player.setter
+    def logic_player(self, logic_player:core.PlayerAgent):
+        # automatically make player a listener
+        logic_player.add_action_listener(self)
+        self._logic_player = logic_player
+
+    def add_card(self, card):
+        """Add a card to player's hand"""
+        self.cards.append(card)
+        # Make sure card is face up in player's hand
+        if not card.is_face_up:
+            card.is_face_up = True
+            card.flip()
+        self.update_card_positions()
+
+    def remove_card(self, card):
+        """Remove a card from player's hand"""
+        if card in self.cards:
+            self.cards.remove(card)
+            if card in self.selected_cards:
+                self.selected_cards.remove(card)
+            self.update_card_positions()
+
+    def update_card_positions(self):
+        """Update positions of all cards in hand"""
+        if not self.cards:
+            return
+
+        stacked = len(self.cards) > 5
+
+        if self.position in ['bottom', 'top']:
+            self._arrange_horizontal(stacked)
+        else:
+            self._arrange_vertical(stacked)
+
+    def _arrange_horizontal(self, stacked):
+        """Arrange cards horizontally (for bottom and top players)"""
+        # Calculate total width based on number of visible cards
+        total_width = CARD_WIDTH * (5 if stacked else len(self.cards))
+        if not stacked:
+            total_width += HORIZONTAL_SPACING * (len(self.cards) - 1)
+
+        # Center the cards horizontally
+        start_x = (WINDOW_WIDTH - total_width) / 2
+        # Position cards at top or bottom
+        y = WINDOW_HEIGHT - (CARD_HEIGHT * 1.05) if self.position == 'bottom' else CARD_HEIGHT / 1.35
+
+        for i, card in enumerate(self.cards):
+            if stacked:
+                # Calculate horizontal stack offset
+                x_offset = min(i, 4) * (total_width / 4)  # Position first 5 cards
+                stack_x_offset = (i - 4) * HORIZONTAL_SPACING / 2 if i >= 5 else 0  # Offset additional cards
+                x = start_x + x_offset + stack_x_offset
+            else:
+                # Simple horizontal layout
+                x = start_x + i * (CARD_WIDTH + HORIZONTAL_SPACING)
+
+            card.update_position((x, y))
+
+            # Set only rotation, cards should stay face up
+            if self.position == 'top':
+                card.rotation2d = math_util.euler_angle_to_rotation(180)
+            else:  # bottom
+                card.rotation2d = math_util.euler_angle_to_rotation(0)
+
+    def _arrange_vertical(self, stacked):
+        """Arrange cards vertically (for left and right players)"""
+        total_height = CARD_HEIGHT * (5 if stacked else len(self.cards))
+        if not stacked:
+            total_height += VERTICAL_SPACING * (len(self.cards) - 1)
+
+        # Position cards at sides
+        x = 100 if self.position == 'left' else WINDOW_WIDTH - 100
+        start_y = (WINDOW_HEIGHT - total_height) / 2
+
+        for i, card in enumerate(self.cards):
+            if stacked:
+                y_offset = min(i, 4) * (CARD_HEIGHT + VERTICAL_SPACING)
+                x_offset = (i - 4) * HORIZONTAL_SPACING / 2 if i >= 5 else 0
+                final_x = x + (x_offset if self.position == 'left' else -x_offset)
+                card.update_position((final_x, start_y + y_offset))
+            else:
+                card.update_position((x, start_y + i * (CARD_HEIGHT + VERTICAL_SPACING)))
+
+            # Set only rotation, cards should stay face up
+            angle = -90 if self.position == 'left' else 90
+            card.rotation2d = math_util.euler_angle_to_rotation(angle)
+
+    def handle_click(self, pos):
+        """Handle clicking on a card in player's hand"""
+        for card in self.cards:
+            if card.rect.collidepoint(pos):
+                return card
+        return None
+
+    def draw_start_cards(self, job):
+        pass
+
+    def start_turn(self,job):
+        job.add_start_evoke_listener(self.game_state.start_turn)
+
+    def start_draw_from_deck(self,job):
+        def toggle_draw_mode():
+            if not self.game_state.draw_mode_active:
+                self.game_state.toggle_draw_mode()
+                print(f"player {self} draw from deck")
+        job.add_start_evoke_listener(toggle_draw_mode)
+
+    def draw_card_from_deck(self,job):
+        job.add_start_evoke_listener(self.game_state.draw_single_card)
+
+    def end_draw_card_from_deck(self,job):
+        job.add_start_evoke_listener(self.game_state.confirm_drawn_cards_start)
+        job.add_end_evoke_listener(self.game_state.confirm_drawn_cards_end)
+
+    def select_card(self, card, job):
+        def select_collection_card():
+            visual_card = self.game_state.logic_card_to_visual_card(card)
+            self.game_state.select_card(visual_card)
+        job.add_start_evoke_listener(select_collection_card)
+
+    def deselect_card(self, card, job):
+        def deselect_collection_card():
+            visual_card = self.game_state.logic_card_to_visual_card(card)
+            self.game_state.deselect_card(visual_card)
+        job.add_start_evoke_listener(deselect_collection_card)
+
+    def dispose_selected(self, job):
+        job.add_start_evoke_listener(self.game_state.discard_selected_cards)
+
+    def pass_turn(self, job):
+        job.add_start_evoke_listener(self.game_state.end_turn)
+
+    def start_draw_from_other_player(self, other_player, job):
+        job.add_start_evoke_listener(self.game_state.toggle_take_opponent_mode)
+
+    def select_from_other_player(self, other_player, card, job):
+        def select_other_player_card():
+            visual_card = self.game_state.logic_card_to_visual_card(card)
+            self.game_state.select_other_player_card(visual_card)
+        job.add_start_evoke_listener(select_other_player_card)
+
+    def draw_from_other_player(self, other_player, job):
+        job.add_start_evoke_listener(self.game_state.take_opponent_card)
+
+    def end_draw_from_other_player(self, job):
+        pass
+
+class HumanPlayerInput(core.PlayerInput):
+    def __init__(self):
+        super().__init__()
+        self.valid_group_memory = None
+        self.other_player_memory = None
+
+    def activate(self):
+        super().activate()
+        print("HumanPlayerInput Activated")
+
+    def deactivate(self):
+        super().deactivate()
+        print("HumanPlayerInput Deactivated")
+
+    def pass_turn(self):
+        if not self.active:
+            return
+        self.player.pass_turn()
+
+    def start_draw_from_other_player(self, other_player):
+        if not self.active:
+            return
+        self.player.start_draw_from_other_player(other_player)
+        self.other_player_memory = other_player
+
+    def select_from_other_player(self, card):
+        if not self.active:
+            return
+        self.player.select_from_other_player(self.other_player_memory, card)
+
+    def draw_from_other_player(self):
+        if not self.active:
+            return
+        self.player.draw_from_other_player(self.other_player_memory)
+        self.player.end_draw_from_other_player() # draw, and immediately end
+
+    def start_draw_from_deck(self):
+        if not self.active:
+            return
+        self.player.start_draw_from_deck()
+
+    def draw_card_from_deck(self):
+        if not self.active:
+            return
+        player_status = self.player.game_manager.get_player_status(self.player)
+        if player_status.num_card_drawn_from_deck < 3 and self.player.card_count() < 20:
+            self.player.draw_card_from_deck()
+
+    def end_draw_card_from_deck(self):
+        if not self.active:
+            return
+        self.player.end_draw_card_from_deck()
+
+    def select_card(self, card):
+        if not self.active:
+            return
+        self.player.select_card(card)
+
+    def deselect_card(self, card):
+        if not self.active:
+            return
+        self.player.deselect_card(card)
+
+    def dispose_selected(self):
+        if not self.active:
+            return
+        if self.player.selected_valid_group():
+            self.player.dispose_selected()
+
+
+
+def list_diff(old_list, new_list):
+    diff_in = [card for card in new_list if not card in old_list]
+    diff_out = [card for card in old_list if not card in new_list]
+    return diff_in, diff_out
+
+
+class GameState:
+
+    def __init__(self, num_players=2):
+        self.game_logic_server = None
+        self.game_manager = None
+        self.human_input = None
+        self._init_game_manager(num_players)
+
+        self.logic_card_to_card_mapping = {}
+        self.logic_player_to_player_mapping = {}
+
+        self.players = []
+        self.current_player = -1
+        self.deck = self._create_deck()
+        self._init_players(num_players)
+        self.start_draw_initial_card()
+
+        self.selected_opponent_card = None
+        self.has_drawn_this_turn = False
+        self.has_taken_player_card_this_turn = False
+        self.num_players = num_players
+        self.draw_mode_active = False
+        self.cards_drawn_this_turn = 0
+        self.deck_highlighted = False
+        self.animation_in_progress = False
+        self.drawn_cards = []  # Store temporarily drawn cards
+        self.drawn_card_positions = []  # Store positions for drawn cards
+
+    def logic_card_to_visual_card(self, logic_card):
+        return self.logic_card_to_card_mapping[logic_card]
+
+    def _init_game_manager(self, num_players):
+        self.game_logic_server = core.Game()
+        self.game_manager = self.game_logic_server.game_manager
+        for i in range(num_players):
+            if i == 0:
+                human_player_input = HumanPlayerInput()
+                self.human_input = human_player_input
+                last_player = core.PlayerAgent(self.game_manager, human_player_input)  # todo: first is human player
+            else:
+                last_player = core.PlayerAgent(self.game_manager,core.AIPlayerInput()) # todo: first is human player
+            self.game_manager.add_player(last_player)
+
+    def start_draw_initial_card(self):
+        job = None
+        for player in self.players:
+            logic_player = player.logic_player
+            job = logic_player.draw_start_cards()
+            job.add_start_evoke_listener(self.on_draw_initial_5_card_to_player_wrapper(player))
+            # job.add_start_evoke_listener(lambda: print(f"draw initial cards {logic_player}"))
+            print(f"logic_player:{logic_player}")
+        job.add_end_evoke_listener(self.game_manager.start_next_player_turn)
+        # job.add_end_evoke_listener(self.start_playing)
+
+    def on_draw_initial_5_card_to_player_wrapper(self, player):
+        # you will fall in pit if you just use lambda expression
+        def on_draw_initial_5_card_to_player():
+            self._sync_player_card(player)
+            self._sync_deck_card()
+        return on_draw_initial_5_card_to_player
+
+    def _create_deck(self):
+        """Create and shuffle the initial deck"""
+        # colors = ['red', 'blue', 'green', 'yellow']
+        # numbers = range(1, 11)
+        deck = []
+        # for _ in range(2):  # Two of each card
+        #     for color in colors:
+        #         for number in numbers:
+        #             card = Card(color, number)
+        #             card.set_face_down()  # Make sure deck cards start face down
+        #             deck.append(card)
+        # random.shuffle(deck)
+        # now I think they should be bound to game logic server
+        logic_cards = self.game_manager.deck.card_as_list()
+        for logic_card in logic_cards:
+            visual_card = Card(logic_card.color, logic_card.number)
+            visual_card.set_face_down()
+            visual_card.logic_card = logic_card
+            self.logic_card_to_card_mapping[logic_card] = visual_card
+            deck.append(visual_card)
+        print(f"Deck Created {len(deck)} cards")
+        return deck
+
+    def _sync_deck_card(self):
+        logic_deck_cards = self.game_manager.deck.card_as_list()
+        self.deck = [self.logic_card_to_card_mapping[logic_card] for logic_card in logic_deck_cards]
+
+    def _sync_player_card(self, player):
+        logic_player = player.logic_player
+        logic_hand_cards = logic_player.card_as_list()
+        new_cards = [self.logic_card_to_card_mapping[logic_card] for logic_card in logic_hand_cards]
+        # low efficient, but useful
+        diff_in = [card for card in new_cards if not card in player.cards]
+        diff_out = [card for card in player.cards if not card in new_cards]
+        for card in diff_out:
+            player.remove_card(card)
+        for card in diff_in:
+            player.add_card(card)
+            card.set_face_up()
+        return diff_in, diff_out
+
+    def _sync_player_turn(self):
+        self.current_player = self.game_manager.player_turn
+
+    def _init_players(self, num_players):
+        """Initialize players with their starting hands"""
+        positions = ['bottom', 'top'] if num_players == 2 else ['bottom', 'left', 'right']
+        # for position in positions:
+        #     initial_cards = []
+        #     for _ in range(5):
+        #         card = self.deck.pop()
+        #         card.set_face_up()  # Explicitly set card face up
+        #         initial_cards.append(card)
+        #
+        #     player = Player(position, initial_cards)
+        #     self.players.append(player)
+        #     player.update_card_positions()
+        #
+        #     # Double check all cards are face up
+        #     for card in player.cards:
+        #         card.set_face_up()
+        logic_players = self.game_manager.players
+        for i in range(num_players):
+            position = positions[i]
+            logic_player = logic_players[i]
+            player = Player(position, [])
+            self.players.append(player)
+            player.update_card_positions()
+            player.logic_player = logic_player
+            player.game_state = self
+            self.logic_player_to_player_mapping[logic_player] = player
+
+    def toggle_draw_mode(self):
+        """Toggle draw mode on/off"""
+        if not self.has_taken_player_card_this_turn and not self.has_drawn_this_turn and self.cards_drawn_this_turn < 3:
+            self.draw_mode_active = not self.draw_mode_active
+            self.deck_highlighted = self.draw_mode_active
+            # Clear any existing drawn cards if turning off draw mode
+            if not self.draw_mode_active:
+                self.drawn_cards = []
+                self.drawn_card_positions = []
+        else:
+            self.draw_mode_active = False
+            self.deck_highlighted = False
+
+    def toggle_take_opponent_mode(self):
+        #todo: flip all the cards and shuffle
+        pass
+
+    def draw_single_card(self):
+        """Draw a single card from the deck but don't add to hand yet"""
+        if (self.draw_mode_active and
+                len(self.drawn_cards) < 3 and
+                self.deck and
+                not self.animation_in_progress):
+
+            # card = self.deck.pop()
+            old_logic_cards = [card.logic_card for card in self.drawn_cards]
+            new_logic_cards = self.game_manager.draw_card_buffer.card_as_list()
+            diff_in, diff_out = list_diff(old_logic_cards, new_logic_cards)
+            assert len(diff_in) == 1
+            card = self.logic_card_to_card_mapping[diff_in[0]]
+            print(f'{card.logic_card} draw from the deck to buffer')
+            card.set_face_down()  # Keep drawn card face down
+
+            # Calculate position for the drawn card
+            deck_x = WINDOW_WIDTH / 2
+            deck_y = WINDOW_HEIGHT / 2
+            offset_x = CARD_WIDTH + 20  # Space between drawn cards
+
+            # Position cards to the left of the deck
+            card_x = deck_x - offset_x - (len(self.drawn_cards) * (CARD_WIDTH + 10))
+            card_y = deck_y
+
+            card.update_position((card_x, card_y))
+            self.drawn_cards.append(card)
+            self.drawn_card_positions.append((card_x, card_y))
+
+            return True
+        return False
+
+    def confirm_drawn_cards_start(self):
+        """Add drawn cards to player's hand when End Draw is clicked"""
+        if self.drawn_cards:
+            # First flip all cards face up
+            for card in self.drawn_cards:
+                card.set_face_up()
+
+            # Wait a short moment to let player see cards
+            # todo: I think maybe the animation system will handle it
+            # pygame.time.wait(500)
+
+    def confirm_drawn_cards_end(self):
+        if self.drawn_cards:
+            # Wait a short moment to let player see cards
+            # pygame.time.wait(500)
+            # Add cards to player's hand
+            current_player = self.players[self.current_player]
+            for card in self.drawn_cards:
+                current_player.add_card(card)
+
+            self._sync_deck_card()
+            diff_in, diff_out = self._sync_player_card(current_player)
+            assert len(diff_in) == 0 and len(diff_out) == 0
+
+            self.cards_drawn_this_turn = len(self.drawn_cards)
+            self.drawn_cards = []
+            self.drawn_card_positions = []
+
+            if self.cards_drawn_this_turn > 0:
+                self.has_drawn_this_turn = True
+                self.draw_mode_active = False
+                self.deck_highlighted = False
+
+            current_player.update_card_positions()
+
+    def clear_highlights(self):
+        """Clear all highlights and selections"""
+        if self.selected_opponent_card:
+            self.selected_opponent_card.highlighted = False
+            self.selected_opponent_card = None
+
+        for player in self.players:
+            for card in player.cards:
+                card.highlighted = False
+
+    def is_valid_sequence(self, cards):
+        """Check if cards form a valid sequence (same color, consecutive numbers)"""
+        if len(cards) < 3:
+            return False
+
+        color = cards[0].color
+        if not all(card.color == color for card in cards):
+            return False
+
+        numbers = sorted(card.number for card in cards)
+        return all(numbers[i] + 1 == numbers[i + 1] for i in range(len(numbers) - 1))
+
+    def is_valid_set(self, cards):
+        """Check if cards form a valid set (same number, different colors)"""
+        if len(cards) < 3:
+            return False
+
+        number = cards[0].number
+        if not all(card.number == number for card in cards):
+            return False
+
+        colors = [card.color for card in cards]
+        return len(colors) == len(set(colors))  # All colors must be different
+
+    def is_valid_group(self, cards):
+        """Check if cards form either a valid sequence or set"""
+        return self.is_valid_sequence(cards) or self.is_valid_set(cards)
+
+    def select_other_player_card(self, card:Card):
+        if isinstance(card, core.Card):
+            card = self.logic_card_to_card_mapping[card]
+        if self.selected_opponent_card:
+            card.highlighted = False
+        self.selected_opponent_card = card
+        card.highlighted = True
+        print(f"select_other_player_card(self, {card})")
+
+    def handle_click(self, pos):
+        """Handle clicking on a card"""
+        # Check opponent's cards first
+        for i, player in enumerate(self.players):
+            if i != self.current_player:
+                clicked_card = player.handle_click(pos)
+                if clicked_card:
+                    if self.selected_opponent_card:
+                        self.selected_opponent_card.highlighted = False
+                    self.selected_opponent_card = clicked_card # todo: deselect other cards
+                    clicked_card.highlighted = True
+                    return True
+
+        # Then check current player's cards
+        current_player = self.players[self.current_player]
+        clicked_card = current_player.handle_click(pos)
+        if clicked_card:
+            # clicked_card.selected = not clicked_card.selected
+            if clicked_card.selected:
+                # current_player.selected_cards.append(clicked_card)
+                # self.human_input.select_card(clicked_card.logic_card)
+                print(f"card clicked: {clicked_card}")
+            else:
+                # if clicked_card in current_player.selected_cards:
+                #     current_player.selected_cards.remove(clicked_card)
+                print(f"card clicked: {clicked_card}")
+            return True
+        return False
+
+    def select_card(self, card):
+        current_player = self.players[self.current_player]
+        if card not in current_player.cards:
+            raise ValueError(f"{card} does not exist in current player")
+        card.selected = True
+        current_player.selected_cards.append(card)
+        print(f"Card {card} selected")
+
+    def deselect_card(self, card):
+        current_player = self.players[self.current_player]
+        if card not in current_player.cards:
+            raise ValueError(f"{card} does not exist in current player")
+        card.selected = False
+        current_player.selected_cards.remove(card)
+        print(f"Card {card} deselected")
+
+    def take_opponent_card(self):
+        """Take a highlighted card from an opponent"""
+        if self.selected_opponent_card and not self.has_drawn_this_turn:
+            for player in self.players:
+                if self.selected_opponent_card in player.cards:
+                    print("TAKE OPPONENT CARD")
+                    # player.remove_card(self.selected_opponent_card)
+                    # Keep card face up when moving between players
+                    diff_in, diff_out = self._sync_player_card(player)
+                    assert len(diff_out) == 1
+                    self.selected_opponent_card.is_face_up = True
+                    # self.players[self.current_player].add_card(self.selected_opponent_card)
+                    current_player = self.players[self.current_player]
+                    diff_in, diff_out = self._sync_player_card(current_player)
+                    assert len(diff_in) == 1
+                    self.selected_opponent_card.highlighted = False
+                    self.selected_opponent_card = None
+                    self.has_drawn_this_turn = True
+                    return True
+        return False
+
+    def discard_cards(self, cards):
+        """Discard a valid group of cards"""
+        # if not self.is_valid_group(cards):
+        #     return False
+
+        current_player = self.players[self.current_player]
+        self._sync_player_card(current_player)
+        for card in cards:
+            current_player.remove_card(card)
+            # Make cards face down when returning to deck
+            card.set_face_down()
+            # self.deck.append(card)
+        self._sync_deck_card()
+        random.shuffle(self.deck)
+        current_player.update_card_positions()
+        return True
+
+    def discard_selected_cards(self):
+        current_player = self.players[self.current_player]
+        diff_in, diff_out = self._sync_player_card(current_player)
+        assert len(diff_in) == 0
+        cards = diff_out
+        for card in cards:
+            # current_player.remove_card(card)
+            # Make cards face down when returning to deck
+            card.set_face_down()
+            card.selected = False
+            # self.deck.append(card)
+        self._sync_deck_card()
+        random.shuffle(self.deck)
+        current_player.update_card_positions()
+        print(f"{cards} discarded")
+        return True
+
+    def start_turn(self):
+        self._sync_player_turn()
+        print(f"Started {self.current_player}'s turn")
+
+    def end_turn(self):
+        """End the current player's turn and move to the next player"""
+        self.draw_mode_active = False
+        self.deck_highlighted = False
+        self.cards_drawn_this_turn = 0
+        self.has_drawn_this_turn = False
+
+        # Clear any remaining drawn cards
+        self.drawn_cards = []  # todo: give up draw card in server side
+        self.drawn_card_positions = []
+
+        current_player = self.players[self.current_player]
+        for card in current_player.selected_cards:
+            card.selected = False
+        current_player.selected_cards.clear()
+
+        if self.selected_opponent_card:
+            self.selected_opponent_card.highlighted = False
+            self.selected_opponent_card = None
+
+        # handled in start_turn method
+        # self.current_player = (self.current_player + 1) % len(self.players)
+
+        for player in self.players:
+            player.update_card_positions()
+
+    def draw(self, screen):
+        """Draw all game elements"""
+        # Draw players' cards
+        for player in self.players:
+            for card in player.cards:
+                card.draw(screen)
+
+        # Draw temporarily drawn cards
+        for card in self.drawn_cards:
+            card.draw(screen)
+
+    def check_winner(self):
+        """Check if there's a winner (player with no cards)"""
+        for i, player in enumerate(self.players):
+            if len(player.cards) == 0:
+                return i
+        return None
+
+
+# class GameState:
+#
+#     def __init__(self, num_players=2):
+#         self.players = []
+#         self.current_player = 0
+#         self.deck = self._create_deck()
+#         self._init_players(num_players)
+#         self.selected_opponent_card = None
+#         self.has_drawn_this_turn = False
+#         self.num_players = num_players
+#         self.draw_mode_active = False
+#         self.cards_drawn_this_turn = 0
+#         self.deck_highlighted = False
+#         self.animation_in_progress = False
+#         self.drawn_cards = []  # Store temporarily drawn cards
+#         self.drawn_card_positions = []  # Store positions for drawn cards
+#
+#
+#     def _create_deck(self):
+#         """Create and shuffle the initial deck"""
+#         colors = ['red', 'blue', 'green', 'yellow']
+#         numbers = range(1, 11)
+#         deck = []
+#         for _ in range(2):  # Two of each card
+#             for color in colors:
+#                 for number in numbers:
+#                     card = Card(color, number)
+#                     card.set_face_down()  # Make sure deck cards start face down
+#                     deck.append(card)
+#         random.shuffle(deck)
+#         return deck
+#
+#     def _init_players(self, num_players):
+#         """Initialize players with their starting hands"""
+#         positions = ['bottom', 'top'] if num_players == 2 else ['bottom', 'left', 'right']
+#         for position in positions:
+#             initial_cards = []
+#             for _ in range(5):
+#                 card = self.deck.pop()
+#                 card.set_face_up()  # Explicitly set card face up
+#                 initial_cards.append(card)
+#
+#             player = Player(position, initial_cards)
+#             self.players.append(player)
+#             player.update_card_positions()
+#
+#             # Double check all cards are face up
+#             for card in player.cards:
+#                 card.set_face_up()
+#
+#     def toggle_draw_mode(self):
+#         """Toggle draw mode on/off"""
+#         if not self.has_drawn_this_turn and self.cards_drawn_this_turn < 3:
+#             self.draw_mode_active = not self.draw_mode_active
+#             self.deck_highlighted = self.draw_mode_active
+#             # Clear any existing drawn cards if turning off draw mode
+#             if not self.draw_mode_active:
+#                 self.drawn_cards = []
+#                 self.drawn_card_positions = []
+#         else:
+#             self.draw_mode_active = False
+#             self.deck_highlighted = False
+#
+#     def draw_single_card(self):
+#         """Draw a single card from the deck but don't add to hand yet"""
+#         if (self.draw_mode_active and
+#                 len(self.drawn_cards) < 3 and
+#                 self.deck and
+#                 not self.animation_in_progress):
+#             card = self.deck.pop()
+#             card.set_face_down()  # Keep drawn card face down
+#
+#             # Calculate position for the drawn card
+#             deck_x = WINDOW_WIDTH / 2
+#             deck_y = WINDOW_HEIGHT / 2
+#             offset_x = CARD_WIDTH + 20  # Space between drawn cards
+#
+#             # Position cards to the left of the deck
+#             card_x = deck_x - offset_x - (len(self.drawn_cards) * (CARD_WIDTH + 10))
+#             card_y = deck_y
+#
+#             card.update_position((card_x, card_y))
+#             self.drawn_cards.append(card)
+#             self.drawn_card_positions.append((card_x, card_y))
+#
+#             return True
+#         return False
+#
+#     def confirm_drawn_cards(self):
+#         """Add drawn cards to player's hand when End Draw is clicked"""
+#         if self.drawn_cards:
+#             # First flip all cards face up
+#             for card in self.drawn_cards:
+#                 card.set_face_up()
+#
+#             # Wait a short moment to let player see cards
+#             pygame.time.wait(500)
+#
+#             # Add cards to player's hand
+#             current_player = self.players[self.current_player]
+#             for card in self.drawn_cards:
+#                 current_player.add_card(card)
+#
+#             self.cards_drawn_this_turn = len(self.drawn_cards)
+#             self.drawn_cards = []
+#             self.drawn_card_positions = []
+#
+#             if self.cards_drawn_this_turn > 0:
+#                 self.has_drawn_this_turn = True
+#                 self.draw_mode_active = False
+#                 self.deck_highlighted = False
+#
+#             current_player.update_card_positions()
+#
+#     def clear_highlights(self):
+#         """Clear all highlights and selections"""
+#         if self.selected_opponent_card:
+#             self.selected_opponent_card.highlighted = False
+#             self.selected_opponent_card = None
+#
+#         for player in self.players:
+#             for card in player.cards:
+#                 card.highlighted = False
+#
+#     def is_valid_sequence(self, cards):
+#         """Check if cards form a valid sequence (same color, consecutive numbers)"""
+#         if len(cards) < 3:
+#             return False
+#
+#         color = cards[0].color
+#         if not all(card.color == color for card in cards):
+#             return False
+#
+#         numbers = sorted(card.number for card in cards)
+#         return all(numbers[i] + 1 == numbers[i + 1] for i in range(len(numbers) - 1))
+#
+#     def is_valid_set(self, cards):
+#         """Check if cards form a valid set (same number, different colors)"""
+#         if len(cards) < 3:
+#             return False
+#
+#         number = cards[0].number
+#         if not all(card.number == number for card in cards):
+#             return False
+#
+#         colors = [card.color for card in cards]
+#         return len(colors) == len(set(colors))  # All colors must be different
+#
+#     def is_valid_group(self, cards):
+#         """Check if cards form either a valid sequence or set"""
+#         return self.is_valid_sequence(cards) or self.is_valid_set(cards)
+#
+#     def handle_click(self, pos):
+#         """Handle clicking on a card"""
+#         # Check opponent's cards first
+#         for i, player in enumerate(self.players):
+#             if i != self.current_player:
+#                 clicked_card = player.handle_click(pos)
+#                 if clicked_card:
+#                     if self.selected_opponent_card:
+#                         self.selected_opponent_card.highlighted = False
+#                     self.selected_opponent_card = clicked_card
+#                     clicked_card.highlighted = True
+#                     return True
+#
+#         # Then check current player's cards
+#         current_player = self.players[self.current_player]
+#         clicked_card = current_player.handle_click(pos)
+#         if clicked_card:
+#             clicked_card.selected = not clicked_card.selected
+#             if clicked_card.selected:
+#                 current_player.selected_cards.append(clicked_card)
+#             else:
+#                 if clicked_card in current_player.selected_cards:
+#                     current_player.selected_cards.remove(clicked_card)
+#             return True
+#         return False
+#
+#     def take_opponent_card(self):
+#         """Take a highlighted card from an opponent"""
+#         if self.selected_opponent_card and not self.has_drawn_this_turn:
+#             for player in self.players:
+#                 if self.selected_opponent_card in player.cards:
+#                     player.remove_card(self.selected_opponent_card)
+#                     # Keep card face up when moving between players
+#                     self.selected_opponent_card.is_face_up = True
+#                     self.players[self.current_player].add_card(self.selected_opponent_card)
+#                     self.selected_opponent_card.highlighted = False
+#                     self.selected_opponent_card = None
+#                     self.has_drawn_this_turn = True
+#                     return True
+#         return False
+#
+#     def discard_cards(self, cards):
+#         """Discard a valid group of cards"""
+#         if not self.is_valid_group(cards):
+#             return False
+#
+#         current_player = self.players[self.current_player]
+#         for card in cards:
+#             current_player.remove_card(card)
+#             # Make cards face down when returning to deck
+#             card.set_face_down()
+#             self.deck.append(card)
+#
+#         random.shuffle(self.deck)
+#         current_player.update_card_positions()
+#         return True
+#
+#     def end_turn(self):
+#         """End the current player's turn and move to the next player"""
+#         self.draw_mode_active = False
+#         self.deck_highlighted = False
+#         self.cards_drawn_this_turn = 0
+#         self.has_drawn_this_turn = False
+#
+#         # Clear any remaining drawn cards
+#         self.drawn_cards = []
+#         self.drawn_card_positions = []
+#
+#         current_player = self.players[self.current_player]
+#         for card in current_player.selected_cards:
+#             card.selected = False
+#         current_player.selected_cards.clear()
+#
+#         if self.selected_opponent_card:
+#             self.selected_opponent_card.highlighted = False
+#             self.selected_opponent_card = None
+#
+#         self.current_player = (self.current_player + 1) % len(self.players)
+#
+#         for player in self.players:
+#             player.update_card_positions()
+#
+#     def draw(self, screen):
+#         """Draw all game elements"""
+#         # Draw players' cards
+#         for player in self.players:
+#             for card in player.cards:
+#                 card.draw(screen)
+#
+#         # Draw temporarily drawn cards
+#         for card in self.drawn_cards:
+#             card.draw(screen)
+#
+#     def check_winner(self):
+#         """Check if there's a winner (player with no cards)"""
+#         for i, player in enumerate(self.players):
+#             if len(player.cards) == 0:
+#                 return i
+#         return None
+#
+
+
+
+class ScreenBase:
+    def __init__(self, background_filename=None):
+        self.objects = []
+
+        if background_filename is not None:
+            if os.path.exists(background_filename):
+                self.background_image = pygame.image.load(background_filename)
+                self.background_image = pygame.transform.smoothscale(self.background_image, (800, 600))
+            else:
+                print(f"Warning: Background image {background_filename} not found.")
+                self.background_image = None
+        else:
+            self.background_image = None
+
+    def draw(self, screen):
+        if self.background_image is not None:
+            screen.blit(self.background_image, (0, 0))
+        else:
+            screen.fill((0, 0, 0))
+
+        for o in self.objects:
+            o.draw(screen)
+
+    def update(self):
+        for o in self.objects:
+            o.update()
+
+    def keydown(self, event):
+        pass
+
+    def mouseup(self, event):
+        for o in self.objects:
+            o.mouseup(event)
+
+
+class StartScreen(ScreenBase):
+    def __init__(self):
+        super().__init__(background_filename="resources/images/ui/screens/StartScreen.png")
+        self.start_time = pygame.time.get_ticks()
+        self.transition_delay = 3000
+
+    def update(self):
+        current_time = pygame.time.get_ticks()
+        if current_time - self.start_time >= self.transition_delay:
+            self.transition_to_home_screen()
+
+    def transition_to_home_screen(self):
+        global current_screen
+        print("Transitioning to HomeScreen...")
+        current_screen = HomeScreen()
+
+
+class HomeScreen(ScreenBase):
+    def __init__(self):
+        super().__init__(background_filename="resources/images/ui/screens/HomeScreen.png")
+        font = pygame.font.Font(None, 40)
+
+        self.play_label = ClickableLabel("resources/images/ui/labels/play_game_label.png",
+                                         "resources/images/ui/labels/clickable_play_game_label.png",
+                                         (WINDOW_WIDTH / 2, WINDOW_HEIGHT / 3), 0.15)
+        self.play_label.add_click_listener(lambda: change_screen(StartGameScreen()))
+        self.rules_label = ClickableLabel("resources/images/ui/labels/rules_label.png",
+                                          "resources/images/ui/labels/clickable_rules_label.png",
+                                          (WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2.25), 0.15)
+        self.rules_label.add_click_listener(lambda: change_screen(RuleScreen()))
+        self.exit_label = ExitGameLabel("resources/images/ui/labels/exit_label.png",
+                                        "resources/images/ui/labels/clickable_exit_label.png",
+                                        (WINDOW_WIDTH / 2, WINDOW_HEIGHT / 1.8), 0.15)
+
+        self.objects.append(self.play_label)
+        self.objects.append(self.rules_label)
+        self.objects.append(self.exit_label)
+
+
+class RuleScreen(ScreenBase):
+    def __init__(self):
+        super().__init__(background_filename="resources/images/ui/screens/rulescreen.png")
+        self.back_label = BackLabel("resources/images/ui/labels/back_label.png",
+                                    "resources/images/ui/labels/clickable_back_label.png",
+                                    (WINDOW_WIDTH / 1.2, WINDOW_HEIGHT / 1.1))
+        self.objects.append(self.back_label)
+
+
+class StartGameScreen(ScreenBase):
+    def __init__(self):
+        super().__init__(background_filename="resources/images/ui/screens/StartGameScreen.png")
+        print("Initializing StartGameScreen")  # Debug print
+
+        # Initialize two player button
+        self.two_player_label = TwoPlayerLabel(
+            "resources/images/ui/labels/two_player.png",
+            "resources/images/ui/labels/clickable_two_player.png",
+            (WINDOW_WIDTH / 4, WINDOW_HEIGHT / 1.65), 0.15)
+
+        print("Created TwoPlayerLabel")  # Debug print
+
+        # Initialize three player button
+        self.three_player_label = ThreePlayerLabel(
+            "resources/images/ui/labels/three_player.png",
+            "resources/images/ui/labels/clickable_three_player.png",
+            (WINDOW_WIDTH / 1.35, WINDOW_HEIGHT / 1.65), 0.15)
+
+        print("Created ThreePlayerLabel")  # Debug print
+
+        # Add labels to objects list
+        self.objects = []
+        self.objects.append(self.two_player_label)
+        self.objects.append(self.three_player_label)
+        print("Added labels to objects list")  # Debug print
+
+    def update(self):
+        """Update all objects in the screen"""
+        for obj in self.objects:
+            obj.update()
+
+    def mouseup(self, event):
+        """Handle mouse button release"""
+        if event.button == 1:  # Left click
+            mouse_pos = event.pos
+            print(f"Mouse click at position: {mouse_pos}")  # Debug print
+            for obj in self.objects:
+                if obj.is_inside(mouse_pos):
+                    print(f"Clicked on {type(obj).__name__}")  # Debug print
+                    obj.click()
+                    break
+
+    def keydown(self, event):
+        """Handle keyboard events"""
+        if event.key == K_ESCAPE:
+            global current_screen
+            current_screen = HomeScreen()
+
+    def draw(self, screen):
+        """Draw the screen and all its objects"""
+        super().draw(screen)  # Draw background first
+        for obj in self.objects:
+            obj.draw(screen)
+
+
+class EndDrawLabel(ClickableLabel):
+    def __init__(self, game_state):
+        super().__init__(
+            "resources/images/ui/labels/end_draw_label.png",
+            "resources/images/ui/labels/clickable_end_draw_label.png",
+            (WINDOW_WIDTH / 2 + CARD_WIDTH + 100, WINDOW_HEIGHT / 2),  # Position right of deck
+            0.1  # Scale factor
+        )
+        self.game_state = game_state
+        self.visible = False  # Start invisible
+
+    def update(self):
+        # Only show and allow interaction when cards are drawn
+        self.visible = (self.game_state.draw_mode_active and
+                        len(self.game_state.drawn_cards) > 0)
+        if self.visible:
+            super().update()
+
+    def draw(self, screen):
+        if self.visible:
+            super().draw(screen)
+
+    def click(self):
+        if self.visible:
+            # self.game_state.confirm_drawn_cards()
+            self.game_state.human_input.end_draw_card_from_deck()
+
+
+class TwoPlayerScreen(ScreenBase):
+    def __init__(self):
+        super().__init__(background_filename='resources/images/ui/screens/PlayScreen.png')
+        self.game_state = GameState(num_players=2)
+
+        # Initialize all buttons
+        button_scale = 0.1
+        button_y = WINDOW_HEIGHT - 30
+
+        self.buttons = {
+            'deck': ClickableLabel(
+                "resources/images/ui/labels/deck_label.png",
+                "resources/images/ui/labels/clickable_deck_label.png",
+                (WINDOW_WIDTH / 2.25, WINDOW_HEIGHT / 2.18),
+                0.16
+            ),
+            'pass': ClickableLabel(
+                "resources/images/ui/labels/game_pass_label.png",
+                "resources/images/ui/labels/clickable_game_pass_label.png",
+                (WINDOW_WIDTH / 1.7, WINDOW_HEIGHT / 1.075),
+                0.065
+            ),
+            'drawfromdeck': ClickableLabel(
+                "resources/images/ui/labels/draw_from_deck_label.png",
+                "resources/images/ui/labels/clickable_draw_from_deck_label.png",
+                (WINDOW_WIDTH / 3.6, WINDOW_HEIGHT / 1.6),
+                0.15
+            ),
+            'drawfromplayer': ClickableLabel(
+                "resources/images/ui/labels/draw_from_player_label.png",
+                "resources/images/ui/labels/clickable_draw_from_player_label.png",
+                (WINDOW_WIDTH / 1.6, WINDOW_HEIGHT / 1.6),
+                0.15
+            ),
+            'discard': ClickableLabel(
+                "resources/images/ui/labels/discard_label.png",
+                "resources/images/ui/labels/clickable_discard_label.png",
+                (WINDOW_WIDTH / 2.2, WINDOW_HEIGHT / 1.075),
+                0.065
+            ),
+            'playforme': ClickableLabel(
+                "resources/images/ui/labels/play_for_me_label.png",
+                "resources/images/ui/labels/clickable_play_for_me_label.png",
+                (WINDOW_WIDTH / 4, WINDOW_HEIGHT / 1.075),
+                0.065
+            ),
+            'quitgame': QuitGameLabel(
+                "resources/images/ui/labels/quit_game_label.png",
+                "resources/images/ui/labels/clickable_quit_game_label.png",
+                (WINDOW_WIDTH / 1.1, WINDOW_HEIGHT / 1.1),
+                0.09),
+            'end_draw': EndDrawLabel(self.game_state)
+        }
+
+        # Set up button click handlers
+        # self.buttons['pass'].add_click_listener(self.handle_pass)
+        # self.buttons['drawfromdeck'].add_click_listener(self.handle_drawfromdeck)
+        # self.buttons['drawfromplayer'].add_click_listener(self.handle_drawfromplayer)
+        # self.buttons['discard'].add_click_listener(self.handle_discard)
+        # self.buttons['deck'].add_click_listener(self.handle_deck_click)
+
+        self.buttons['pass'].add_click_listener(self.game_state.human_input.pass_turn)
+        self.buttons['drawfromdeck'].add_click_listener(self.game_state.human_input.start_draw_from_deck)
+        def draw_from_player():
+            other_player = self.game_state.players[1].logic_player
+            self.game_state.human_input.start_draw_from_other_player(other_player)
+        self.buttons['drawfromplayer'].add_click_listener(draw_from_player)
+        self.buttons['discard'].add_click_listener(self.game_state.human_input.dispose_selected)
+        self.buttons['deck'].add_click_listener(self.game_state.human_input.draw_card_from_deck)
+
+        self.buttons['playforme'].add_click_listener(self.handle_play_for_me)
+        self.buttons['quitgame'].add_click_listener(self.handle_quitgame)
+
+        # Add buttons to objects list
+        self.objects.extend(self.buttons.values())
+
+    #def select_current_player_card(self, card):
+    def handle_card_click(self, pos):
+        """Handle clicking on cards"""
+        if self.game_state.animation_in_progress:
+            return False
+
+        for player in self.game_state.players:
+            for card in player.cards:
+                if card.rect.collidepoint(pos):
+                    if player == self.game_state.players[self.game_state.current_player]:
+                        print(f"card {card} was clicked")
+                        if not card.selected:
+                            self.game_state.human_input.select_card(card.logic_card)
+                        else:
+                            self.game_state.human_input.deselect_card(card.logic_card)
+                        # Toggle selection for current player's cards
+                        # card.selected = not card.selected
+                        # if card.selected:
+                        #     player.selected_cards.append(card)
+                        # else:
+                        #     if card in player.selected_cards:
+                        #         player.selected_cards.remove(card)
+                    else:
+                        # Highlight opponent's card
+                        self.game_state.clear_highlights()
+                        # card.highlighted = True
+                        # self.game_state.selected_opponent_card = card
+                        # sealed in a method
+                        # self.game_state.select_other_player_card(card)
+                        self.game_state.human_input.select_from_other_player(card.logic_card)
+                    return True
+        return False
+
+    def handle_pass(self):
+        """Handle pass button click"""
+        if not self.game_state.animation_in_progress:
+            self.game_state.end_turn()
+
+    def handle_drawfromplayer(self):
+        """Handle draw button click"""
+        if not self.game_state.animation_in_progress:
+            self.game_state.toggle_take_opponent_mode()
+
+    def handle_drawfromdeck(self):
+        """Handle clicking the deck"""
+        if not self.game_state.animation_in_progress:
+            self.game_state.draw_single_card()
+
+    def handle_deck_click(self):
+        """Handle clicking the deck"""
+        if not self.game_state.animation_in_progress:
+            self.game_state.draw_single_card()
+
+    def handle_discard(self):
+        """Handle discard button click"""
+        if not self.game_state.animation_in_progress:
+            current_player = self.game_state.players[self.game_state.current_player]
+            if len(current_player.selected_cards) >= 3:
+                if self.game_state.is_valid_group(current_player.selected_cards):
+                    self.game_state.discard_cards(current_player.selected_cards)
+
+    def handle_play_for_me(self):
+        """Handle auto-play button click"""
+        ai_input = core.AIPlayerInput()
+        self.game_state.players[0].logic_player.set_input(ai_input)
+        ai_input.activate()
+        ai_input.evaluate_situation_and_response()
+
+    def handle_quitgame(self):
+        if not self.game_state.animation_in_progress:
+            self.game_state.end_turn()
+
+    def mouseup(self, event):
+        """Handle mouse button release"""
+        if event.button == 1:  # Left click
+            if not self.handle_card_click(event.pos):
+                # If no card was clicked, check buttons
+                for button in self.buttons.values():
+                    if button.is_inside(event.pos):
+                        button.click()
+
+            # Update card positions after any changes
+            for player in self.game_state.players:
+                player.update_card_positions()
+
+    def keydown(self, event):
+        """Handle keyboard input"""
+        if event.key == K_SPACE:
+            # self.game_state.take_opponent_card()
+            self.game_state.human_input.draw_from_other_player()
+        elif event.key == K_RETURN:
+            self.game_state.end_turn()
+        elif event.key == K_ESCAPE:
+            global current_screen
+            current_screen = HomeScreen()
+
+    def draw(self, screen):
+        """Draw the game screen"""
+        # Draw background
+        super().draw(screen)
+
+        # Draw game state
+        self.game_state.draw(screen)
+
+        # Draw UI elements
+        for button in self.buttons.values():
+            button.draw(screen)
+
+        # Draw turn indicator
+        font = pygame.font.Font(None, 36)
+        text = font.render(f"Player {self.game_state.current_player + 1}'s Turn", True, (255, 255, 255))
+        screen.blit(text, (10, 10))
+
+        # Draw cards remaining indicator if in draw mode
+        if self.game_state.draw_mode_active:
+            remaining = 3 - self.game_state.cards_drawn_this_turn
+            draw_text = font.render(f"Cards remaining: {remaining}", True, (255, 255, 255))
+            screen.blit(draw_text, (WINDOW_WIDTH - 200, 10))
+
+    def update(self):
+        """Update game state"""
+        self.game_state.game_logic_server.update()  # update the game logic server
+        for button in self.buttons.values():
+            button.update()
+
+        # Update deck appearance based on state
+        if self.game_state.deck_highlighted:
+            self.buttons['deck'].image_src = self.buttons['deck'].img_src_hover
+        else:
+            self.buttons['deck'].image_src = self.buttons['deck'].img_src_normal
+
+
+class ThreePlayerScreen(ScreenBase):
+    def __init__(self):
+        super().__init__(background_filename='resources/images/ui/screens/PlayScreen.png')
+        self.game_state = GameState(num_players=3)
+
+        # Initialize buttons
+        button_scale = 0.1
+        button_y = WINDOW_HEIGHT - 30
+
+        self.buttons = {
+            'deck': ClickableLabel(
+                "resources/images/ui/labels/deck_label.png",
+                "resources/images/ui/labels/clickable_deck_label.png",
+                (WINDOW_WIDTH / 2.25, WINDOW_HEIGHT / 2.18),
+                0.175
+            ),
+            'pass': ClickableLabel(
+                "resources/images/ui/labels/game_pass_label.png",
+                "resources/images/ui/labels/clickable_game_pass_label.png",
+                (WINDOW_WIDTH / 1.5, WINDOW_HEIGHT / 1.075),
+                0.09
+            ),
+            'drawfromdeck': ClickableLabel(
+                "resources/images/ui/labels/draw_from_deck_label.png",
+                "resources/images/ui/labels/clickable_draw_from_deck_label.png",
+                (WINDOW_WIDTH / 3.9, WINDOW_HEIGHT / 1.45),
+                0.19
+            ),
+            'drawfromplayer': ClickableLabel(
+                "resources/images/ui/labels/draw_from_player_label.png",
+                "resources/images/ui/labels/clickable_draw_from_player_label.png",
+                (WINDOW_WIDTH / 1.5, WINDOW_HEIGHT / 1.45),
+                0.19
+            ),
+            'discard': ClickableLabel(
+                "resources/images/ui/labels/discard_label.png",
+                "resources/images/ui/labels/clickable_discard_label.png",
+                (WINDOW_WIDTH / 2, WINDOW_HEIGHT / 1.075),
+                0.09
+            ),
+            'playforme': ClickableLabel(
+                "resources/images/ui/labels/play_for_me_label.png",
+                "resources/images/ui/labels/clickable_play_for_me_label.png",
+                (WINDOW_WIDTH / 4, WINDOW_HEIGHT / 1.075),
+                0.09
+            ),
+            'quitgame': QuitGameLabel(
+                "resources/images/ui/labels/quit_game_label.png",
+                "resources/images/ui/labels/clickable_quit_game_label.png",
+                (WINDOW_WIDTH / 1.1, WINDOW_HEIGHT / 1.1),
+                0.1),
+            'end_draw': EndDrawLabel(self.game_state)
+        }
+
+        # Set up button click handlers
+        self.buttons['pass'].add_click_listener(self.handle_pass)
+        self.buttons['drawfromdeck'].add_click_listener(self.handle_drawfromdeck)
+        self.buttons['drawfromplayer'].add_click_listener(self.handle_drawfromplayer)
+        self.buttons['discard'].add_click_listener(self.handle_discard)
+        self.buttons['playforme'].add_click_listener(self.handle_play_for_me)
+        self.buttons['deck'].add_click_listener(self.handle_deck_click)
+        self.buttons['quitgame'].add_click_listener(self.handle_quitgame)
+
+        # Add buttons to objects list
+        self.objects.extend(self.buttons.values())
+
+    def handle_card_click(self, pos):
+        """Handle clicking on cards"""
+        if self.game_state.animation_in_progress:
+            return False
+
+        for player in self.game_state.players:
+            for card in player.cards:
+                if card.rect.collidepoint(pos):
+                    if player == self.game_state.players[self.game_state.current_player]:
+                        # Toggle selection for current player's cards
+                        card.selected = not card.selected
+                        if card.selected:
+                            player.selected_cards.append(card)
+                        else:
+                            if card in player.selected_cards:
+                                player.selected_cards.remove(card)
+                    else:
+                        # Highlight opponent's card
+                        self.game_state.clear_highlights()
+                        # card.highlighted = True
+                        # self.game_state.selected_opponent_card = card
+                        self.game_state.select_other_player_card(card)
+                    return True
+        return False
+
+    def handle_pass(self):
+        """Handle pass button click"""
+        if not self.game_state.animation_in_progress:
+            self.game_state.end_turn()
+
+    def handle_draw_click(self):
+        """Handle draw button click"""
+        if not self.game_state.animation_in_progress:
+            self.game_state.toggle_draw_mode()
+
+    def handle_deck_click(self):
+        """Handle clicking the deck"""
+        if not self.game_state.animation_in_progress:
+            self.game_state.draw_single_card()
+
+    def handle_discard(self):
+        """Handle discard button click"""
+        if not self.game_state.animation_in_progress:
+            current_player = self.game_state.players[self.game_state.current_player]
+            if len(current_player.selected_cards) >= 3:
+                if self.game_state.is_valid_group(current_player.selected_cards):
+                    self.game_state.discard_cards(current_player.selected_cards)
+
+    def handle_play_for_me(self):
+        """Handle auto-play button click"""
+        pass
+
+    def mouseup(self, event):
+        """Handle mouse button release"""
+        if event.button == 1:  # Left click
+            if not self.handle_card_click(event.pos):
+                # If no card was clicked, check buttons
+                for button in self.buttons.values():
+                    if button.is_inside(event.pos):
+                        button.click()
+
+            # Update card positions after any changes
+            for player in self.game_state.players:
+                player.update_card_positions()
+
+    def keydown(self, event):
+        """Handle keyboard input"""
+        if event.key == K_SPACE:
+            self.game_state.take_opponent_card()
+        elif event.key == K_RETURN:
+            self.game_state.end_turn()
+        elif event.key == K_ESCAPE:
+            global current_screen
+            current_screen = HomeScreen()
+
+    def draw(self, screen):
+        """Draw the game screen"""
+        # Draw background
+        super().draw(screen)
+
+        # Draw game state
+        self.game_state.draw(screen)
+
+        # Draw UI elements
+        for button in self.buttons.values():
+            button.draw(screen)
+
+        # Draw turn indicator
+        font = pygame.font.Font(None, 36)
+        text = font.render(f"Player {self.game_state.current_player + 1}'s Turn", True, (255, 255, 255))
+        screen.blit(text, (10, 10))
+
+        # Draw cards remaining indicator if in draw mode
+        if self.game_state.draw_mode_active:
+            remaining = 3 - self.game_state.cards_drawn_this_turn
+            draw_text = font.render(f"Cards remaining: {remaining}", True, (255, 255, 255))
+            screen.blit(draw_text, (WINDOW_WIDTH - 200, 10))
+
+        # Draw player labels for 3-player mode
+        self.draw_player_labels(screen)
+
+    def draw_player_labels(self, screen):
+        """Draw labels to identify each player in three player layout"""
+        font = pygame.font.Font(None, 24)
+
+        # Bottom player (current player)
+        bottom_text = font.render("Player 1", True, (255, 255, 255))
+        screen.blit(bottom_text, (WINDOW_WIDTH / 2 - 30, WINDOW_HEIGHT - 20))
+
+        # Left player
+        left_text = font.render("Player 2", True, (255, 255, 255))
+        screen.blit(left_text, (20, WINDOW_HEIGHT / 2))
+
+        # Right player
+        right_text = font.render("Player 3", True, (255, 255, 255))
+        screen.blit(right_text, (WINDOW_WIDTH - 100, WINDOW_HEIGHT / 2))
+
+    def update(self):
+        """Update game state"""
+        for button in self.buttons.values():
+            button.update()
+
+        # Update deck appearance based on state
+        if self.game_state.deck_highlighted:
+            self.buttons['deck'].image_src = self.buttons['deck'].img_src_hover
+        else:
+            self.buttons['deck'].image_src = self.buttons['deck'].img_src_normal
+
+
+class CongratsScreen(ScreenBase):
+    def __init__(self):
+        super().__init__(background_filename='resources/images/ui/screen/CongratsScreen.png')
+
+        self.newgame_label = NewGameLabel("resources/images/ui/labels/new_game_label.png",
+                                          "resources/images/ui/labels/clickable_new_game_label.png",
+                                          (WINDOW_WIDTH / 2, WINDOW_HEIGHT / 1.1))
+        self.quit_game_label = QuitGameLabel("resources/images/ui/labels/quit_game_label.png",
+                                             "resources/images/ui/labels/clickable_quit_game_label.png",
+                                             (WINDOW_WIDTH / 1.2, WINDOW_HEIGHT / 1.1))
+
+        self.objects.append(self.newgame_label)
+        self.objects.append(self.quit_game_label)
+
+    def keydown(self, event):
+        if event.key == K_ESCAPE:
+            global game_over
+            game_over = True
+
+
+class LoseScreen(ScreenBase):
+    def __init__(self):
+        super().__init__(background_filename='resources/images/ui/screens/LoseScreen.png')
+
+        self.newgame_label = NewGameLabel("resources/images/ui/labels/new_game_label.png",
+                                          "resources/images/ui/labels/clickable_new_game_label.png",
+                                          (WINDOW_WIDTH / 2, WINDOW_HEIGHT / 1.1))
+        self.quit_game_label = QuitGameLabel("resources/images/ui/labels/quit_game_label.png",
+                                             "resources/images/ui/labels/clickable_quit_game_label.png",
+                                             (WINDOW_WIDTH / 1.2, WINDOW_HEIGHT / 1.1))
+
+        self.objects.append(self.newgame_label)
+        self.objects.append(self.quit_game_label)
+
+    def keydown(self, event):
+        if event.key == K_ESCAPE:
+            global game_over
+            game_over = True
+
+
+from time import sleep
+
+pygame.init()
+screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+pygame.display.set_caption('Card Game Funt4stic Te4m')
+current_screen = StartScreen()
+
+
 def main():
-    # Initialize pygame
-    pygame.init()
+    global current_screen
+    game_over = False
 
-    # Set the window dimensions
-    screen = pygame.display.set_mode((configs.WINDOW_WIDTH, configs.WINDOW_HEIGHT))
-    pygame.display.set_caption('Card Game Funt4stic Te4m')
-
-    # Start with the home screen
-    global_variables.current_screen = StartScreen()
-    global_variables.game_over = False
-
-    while not global_variables.game_over:
-        # Event handling
+    while not game_over:
         for event in pygame.event.get():
             if event.type == QUIT:
-                global_variables.game_over = True
+                game_over = True
             if event.type == MOUSEBUTTONUP:
-                global_variables.current_screen.mouseup(event)
+                current_screen.mouseup(event)
             if event.type == KEYDOWN:
-                global_variables.current_screen.keydown(event)
+                current_screen.keydown(event)
 
-        # Update game state
-        global_variables.current_screen.update()
-
-        # Draw everything
-        global_variables.current_screen.draw(screen)
-
-        # Update the screen
+        current_screen.update()
+        current_screen.draw(screen)
         pygame.display.flip()
-
-        # Delay to limit frame rate
         pygame.time.delay(30)
 
     pygame.quit()
 
+
 if __name__ == "__main__":
     main()
+

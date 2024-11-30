@@ -3,6 +3,9 @@ import pygame
 import random
 from enum import Enum
 
+# when you want to mute all the print in the module, this is a good way
+# print = lambda x : None
+
 def verify_cards(string_list):
     checked_list = []
     for card_string in string_list:
@@ -28,6 +31,14 @@ class Card:
 
     def __str__(self):
         return f'{self.colour} {self.number}'
+
+    @property
+    def color(self):
+        return self.colour
+
+    @color.setter
+    def color(self, value):
+        self.colour = value
 
 class CollectionOfCards:
     def __init__(self):
@@ -365,7 +376,9 @@ class PlayerOptions(Enum):
     END_DRAW_CARD_FROM_DECK = 3
     START_TURN = 4
     START_DRAW_FROM_OTHER_PLAYER = 5
-    DRAW_CARD_FROM_PLAYER = 6
+    SELECT_CARD_FROM_OTHER_PLAYER = 6
+    DESELECT_CARD_FROM_OTHER_PLAYER = 13
+    DRAW_CARD_FROM_PLAYER = 7
     END_DRAW_FROM_OTHER_PLAYER = 8
     SELECT_CARD_FROM_COLLECTION = 9
     DESELECT_CARD_FROM_COLLECTION = 10
@@ -421,11 +434,15 @@ class AIPlayerInput(PlayerInput):
             else:
                 self.player.start_draw_from_other_player(other_player)
                 self.other_player_memory = other_player
-        elif player_status.draw_from_other_player_start and not player_status.have_drawn_from_other_player:
+        elif player_status.draw_from_other_player_start and not player_status.have_selected_from_other_player:
             other_player_card_count = self.other_player_memory.card_count()
             random_number = random.randint(0, other_player_card_count - 1)
             card = self.other_player_memory.card_at(random_number)
-            self.player.draw_from_other_player(self.other_player_memory, card)
+            self.player.select_from_other_player(self.other_player_memory, card)
+            # self.player.draw_from_other_player(self.other_player_memory, card)
+            print("player.select_from_other_player(self.other_player_memory, card)")
+        elif player_status.have_selected_from_other_player and not player_status.have_drawn_from_other_player:
+            self.player.draw_from_other_player(self.other_player_memory)
             print("player.draw_from_other_player(self.other_player_memory, card)")
         elif not player_status.draw_from_other_player_end and player_status.have_drawn_from_other_player:
             self.player.end_draw_from_other_player()
@@ -448,12 +465,53 @@ class AIPlayerInput(PlayerInput):
                 self.player.select_card(self.valid_group_memory.pop())
         elif self.valid_group_memory is not None:
             if len(self.valid_group_memory) > 0:
-                self.player.select_card(self.valid_group_memory.pop())
+                card = self.valid_group_memory.pop()
+                self.player.select_card(card)
             elif self.player.selected_valid_group():
                 self.player.dispose_selected()
                 self.valid_group_memory = None
             else:
                 print("This branch should not be executed")
+
+class IPlayerAgentListener:
+    def draw_start_cards(self, job):
+        pass
+
+    def start_turn(self,job):
+        pass
+
+    def start_draw_from_deck(self,job):
+        pass
+
+    def draw_card_from_deck(self,job):
+        pass
+
+    def end_draw_card_from_deck(self,job):
+        pass
+
+    def select_card(self, card, job):
+        pass
+
+    def deselect_card(self, card,job):
+        pass
+
+    def dispose_selected(self, job):
+        pass
+
+    def pass_turn(self, job):
+        pass
+
+    def start_draw_from_other_player(self, other_player, job):
+        pass
+
+    def select_from_other_player(self, other_player, card, job):
+        pass
+
+    def draw_from_other_player(self, other_player, job):
+        pass
+
+    def end_draw_from_other_player(self, job):
+        pass
 
 class PlayerAgent(GameLogicActor):
     def __init__(self, game_manager, player_input):
@@ -461,8 +519,19 @@ class PlayerAgent(GameLogicActor):
         self._collection = CollectionOfCards()
         self.player_input = player_input
         self._selected_card_set = set()
-
+        self._other_selected_card = None
+        self._action_listeners = []
         player_input.player = self
+
+    def set_input(self, player_input: PlayerInput):
+        self.player_input = player_input
+        player_input.player = self
+
+    def add_action_listener(self, player_agent_listener: IPlayerAgentListener):
+        self._action_listeners.append(player_agent_listener)
+
+    def card_as_list(self):
+        return self._collection.collection.copy()
 
     def card_count(self):
         return self._collection.count
@@ -474,6 +543,20 @@ class PlayerAgent(GameLogicActor):
         if card in self._collection.collection:
             self._selected_card_set.add(card)
             print(f"{card} was selected")
+        else:
+            raise ValueError(f"{card} not in collection!")
+
+    def mark_card_unselected(self, card):
+        if card in self._collection.collection:
+            self._selected_card_set.remove(card)
+            print(f"{card} was unselected")
+        else:
+            raise ValueError(f"{card} not in collection!")
+
+    def mark_card_other_selected(self, card):
+        if card in self._collection.collection:
+            self._other_selected_card = card
+            print(f"{card} was selected by other")
         else:
             raise KeyError(f"{card} not in collection!")
 
@@ -488,6 +571,12 @@ class PlayerAgent(GameLogicActor):
         self._selected_card_set = set()
         return list(temp)
 
+    def pop_other_selected(self):
+        self._collection.remove_card(self._other_selected_card)
+        temp = self._other_selected_card
+        self._other_selected_card = None
+        return temp
+
     def has_card(self,card):
         return card in self._collection.collection
 
@@ -499,6 +588,9 @@ class PlayerAgent(GameLogicActor):
 
     def selected_as_list(self):
         return list(self._selected_card_set)
+
+    def selected_count(self):
+        return len(self._selected_card_set)
 
     def have_selected(self, card):
         return card in self._selected_card_set
@@ -514,37 +606,82 @@ class PlayerAgent(GameLogicActor):
 
     def draw_start_cards(self):
         deck = self.game_manager.deck
-        return self.send_request(PlayerDrawStartCardJob(deck, self, 0.3))
+        job = PlayerDrawStartCardJob(deck, self, 0.3)
+        for listener in self._action_listeners:
+            listener.draw_start_cards(job)
+        return self.send_request(job)
 
     def start_turn(self):
-        return self.send_request(PlayerStartTurnJob(self))
+        job = PlayerStartTurnJob(self)
+        for listener in self._action_listeners:
+            listener.start_turn(job)
+        return self.send_request(job)
 
     def start_draw_from_deck(self):
-        return self.send_request(StartDrawCardFromDeckJob(self))
+        job = StartDrawCardFromDeckJob(self)
+        for listener in self._action_listeners:
+            listener.start_draw_from_deck(job)
+        return self.send_request(job)
 
     def draw_card_from_deck(self):
-        return self.send_request(DrawCardFromDeckJob(self))
+        job = DrawCardFromDeckJob(self)
+        for listener in self._action_listeners:
+            listener.draw_card_from_deck(job)
+        return self.send_request(job)
 
     def end_draw_card_from_deck(self):
-        return self.send_request(EndDrawCardFromDeckJob(self))
+        job = EndDrawCardFromDeckJob(self)
+        for listener in self._action_listeners:
+            listener.end_draw_card_from_deck(job)
+        return self.send_request(job)
 
     def select_card(self, card):
-        return self.send_request(SelectCardFromCollectionJob(self,card))
+        job = SelectCardFromCollectionJob(self,card)
+        for listener in self._action_listeners:
+            listener.select_card(card,job)
+        return self.send_request(job)
+
+    def deselect_card(self, card):
+        job = DeselectCardFromCollectionJob(self,card)
+        for listener in self._action_listeners:
+            listener.deselect_card(card, job)
+        return self.send_request(job)
 
     def dispose_selected(self):
-        return self.send_request(DiscardSelectedFromCollectionJob(self))
+        job = DiscardSelectedFromCollectionJob(self)
+        for listener in self._action_listeners:
+            listener.dispose_selected(job)
+        return self.send_request(job)
 
     def pass_turn(self):
-        return self.send_request(EndTurnJob(self))
+        job = EndTurnJob(self)
+        for listener in self._action_listeners:
+            listener.pass_turn(job)
+        return self.send_request(job)
 
     def start_draw_from_other_player(self, other_player):
-        return self.send_request(StartDrawCardFromOtherPlayerJob(self, other_player))
+        job = StartDrawCardFromOtherPlayerJob(self, other_player)
+        for listener in self._action_listeners:
+            listener.start_draw_from_other_player(other_player, job)
+        return self.send_request(job)
 
-    def draw_from_other_player(self, other_player, card):
-        return self.send_request(DrawFromOtherPlayerJob(self, other_player, card))
+    def select_from_other_player(self, other_player,card):
+        job = SelectFromOtherPlayerJob(self, other_player, card)
+        for listener in self._action_listeners:
+            listener.select_from_other_player(other_player, card, job)
+        return self.send_request(job)
+
+    def draw_from_other_player(self, other_player):
+        job = DrawFromOtherPlayerJob(self, other_player)
+        for listener in self._action_listeners:
+            listener.draw_from_other_player(other_player, job)
+        return self.send_request(job)
 
     def end_draw_from_other_player(self):
-        return self.send_request(EndDrawFromOtherPlayerJob(self))
+        job = EndDrawFromOtherPlayerJob(self)
+        for listener in self._action_listeners:
+            listener.end_draw_from_other_player(job)
+        return self.send_request(job)
 
 class DrawCardBuffer:
     def __init__(self):
@@ -560,6 +697,9 @@ class DrawCardBuffer:
         cards = self._collection.collection
         self._collection.collection = []
         return cards
+
+    def card_as_list(self):
+        return self._collection.collection.copy()
 
     def full(self):
         return self._collection.count >= 3
@@ -594,6 +734,9 @@ class Deck:
     def shuffle(self):
         print("shuffle deck")
         self._collection.shuffle()
+
+    def card_as_list(self):
+        return self._collection.collection.copy()
 
 class GameJob:
     def __init__(self, function, duration = 0):
@@ -678,14 +821,21 @@ def start_draw_card_from_other_player_wrapper(other_player):
         print(f"start draw from other player {other_player}")
     return start_draw_card
 
-def draw_card_from_other_player_wrapper(player, other_player, card):
-    def draw_card():
+def select_card_from_other_player_wrapper(other_player, card):
+    def select_card():
         if other_player.has_card(card):
-            other_player.remove_card(card)
-            player.push_card(card)
-            print (f"player draw card from other player: {card}")
+            other_player.mark_card_other_selected(card)
+            print(f"{card} selected from other player: {other_player}")
         else:
             raise KeyError("Card not in collection of other player")
+    return select_card
+
+def draw_card_from_other_player_wrapper(player, other_player):
+    def draw_card():
+        card = other_player.pop_other_selected()
+        player.push_card(card)
+        print (f"player draw card from other player: {card}")
+
     return draw_card
 
 class PlayerDrawStartCardJob(PlayerGameJob):
@@ -730,10 +880,16 @@ class StartDrawCardFromOtherPlayerJob(PlayerGameJob):
         self.add_end_evoke_listener(player.player_input.evaluate_situation_and_response)
 
 class DrawFromOtherPlayerJob(PlayerGameJob):
-    def __init__(self, player, other_player, card, duration = 0.3):
-        super().__init__(PlayerOptions.DRAW_CARD_FROM_PLAYER, player, draw_card_from_other_player_wrapper(player, other_player, card),duration)
+    def __init__(self, player, other_player, duration = 0.3):
+        super().__init__(PlayerOptions.DRAW_CARD_FROM_PLAYER, player, draw_card_from_other_player_wrapper(player, other_player),duration)
         self.add_start_evoke_listener(
             lambda: player.game_manager.get_player_status(player).draw_from_other_player())
+        self.add_end_evoke_listener(player.player_input.evaluate_situation_and_response)
+
+class SelectFromOtherPlayerJob(PlayerGameJob):
+    def __init__(self, player, other_player, card, duration = 1):
+        super().__init__(PlayerOptions.SELECT_CARD_FROM_OTHER_PLAYER, player, select_card_from_other_player_wrapper(other_player, card), duration)
+        self.add_start_evoke_listener(player.game_manager.get_player_status(player).select_from_other_player)
         self.add_end_evoke_listener(player.player_input.evaluate_situation_and_response)
 
 class EndDrawFromOtherPlayerJob(PlayerGameJob):
@@ -745,6 +901,12 @@ class EndDrawFromOtherPlayerJob(PlayerGameJob):
 class SelectCardFromCollectionJob(PlayerGameJob):
     def __init__(self, player, card, duration = 0.1):
         super().__init__(PlayerOptions.SELECT_CARD_FROM_COLLECTION, player, lambda : player.mark_card_selected(card), duration = duration)
+        self.add_start_evoke_listener(player.game_manager.get_player_status(player).start_select_valid_group)
+        self.add_end_evoke_listener(player.player_input.evaluate_situation_and_response)
+
+class DeselectCardFromCollectionJob(PlayerGameJob):
+    def __init__(self, player, card, duration = 0.1):
+        super().__init__(PlayerOptions.DESELECT_CARD_FROM_COLLECTION, player, lambda : player.mark_card_unselected(card), duration = duration)
         self.add_start_evoke_listener(player.game_manager.get_player_status(player).start_select_valid_group)
         self.add_end_evoke_listener(player.player_input.evaluate_situation_and_response)
 
@@ -799,6 +961,7 @@ class GamePlayerStatus:
 
         self._start_draw_from_other_player = False
         self._draw_from_other_player = False
+        self._select_from_other_player = False
         self._other_player = None
         self._end_draw_from_other_player = False
 
@@ -830,6 +993,10 @@ class GamePlayerStatus:
         return self._draw_from_other_player
 
     @property
+    def have_selected_from_other_player(self):
+        return self._select_from_other_player
+
+    @property
     def draw_from_other_player_end(self):
         return self._end_draw_from_other_player
 
@@ -846,6 +1013,7 @@ class GamePlayerStatus:
 
         self._start_draw_from_other_player = False
         self._draw_from_other_player = False
+        self._select_from_other_player = False
         self._other_player = None
         self._end_draw_from_other_player = False
 
@@ -873,6 +1041,9 @@ class GamePlayerStatus:
     def start_draw_from_other_player(self, other_player):
         self._start_draw_from_other_player = True
         self._other_player = other_player
+
+    def select_from_other_player(self):
+        self._select_from_other_player = True
 
     def draw_from_other_player(self):
         self._draw_from_other_player = True
@@ -912,12 +1083,17 @@ class GamePlayerStatus:
             return False
         if isinstance(player_game_job, StartDrawCardFromOtherPlayerJob):
             return (not self._start_draw_from_deck) and (not self._start_draw_from_other_player)
-        if isinstance(player_game_job, DrawFromOtherPlayerJob):
+        if isinstance(player_game_job, SelectFromOtherPlayerJob):
             return self._start_draw_from_other_player and (not self._draw_from_other_player) and self._other_player.card_count() > 0
+        if isinstance(player_game_job, DrawFromOtherPlayerJob):
+            return self._start_draw_from_other_player and self._select_from_other_player and (not self._draw_from_other_player)
         if isinstance(player_game_job, EndDrawFromOtherPlayerJob):
             return self._draw_from_other_player and (not self._end_draw_from_other_player)
         if isinstance(player_game_job, SelectCardFromCollectionJob):
             return True
+        if isinstance(player_game_job, DeselectCardFromCollectionJob):
+            player = player_game_job.player
+            return player.selected_count() > 0
         if isinstance(player_game_job, DiscardSelectedFromCollectionJob):
             player = player_game_job.player
             selected_as_list = player.selected_as_list()
@@ -944,17 +1120,25 @@ class GameManager(GameLogicActor):
         self.player_turn = -1
         game_instance.add_actor(self)
 
+        # last_job = None
+        # for _ in range(num_of_players):
+        #     player_1 = PlayerAgent(self, AIPlayerInput())
+        #     self.add_player(player_1)
+        #     last_job = player_1.draw_start_cards()
+        # last_job.add_end_evoke_listener(self.start_next_player_turn)
+        #
+
     @property
     def deck(self):
         return self._deck
 
     @property
-    def players(self):
-        return [player for player in self._player_status_dict.keys()]
-
-    @property
     def draw_card_buffer(self):
         return self._draw_card_buffer
+
+    @property
+    def players(self):
+        return [player for player in self._player_status_dict.keys()]
 
     def get_player_status(self, player):
         return self._player_status_dict[player]
@@ -983,16 +1167,6 @@ class GameManager(GameLogicActor):
 
     def start(self):
         print("start")
-        player_1 = PlayerAgent(self, AIPlayerInput())
-        player_2 = PlayerAgent(self, AIPlayerInput())
-        player_3 = PlayerAgent(self, AIPlayerInput())
-        self.add_player(player_1)
-        self.add_player(player_2)
-        self.add_player(player_3)
-        job1 = player_1.draw_start_cards()
-        job2 = player_2.draw_start_cards()
-        job3 = player_3.draw_start_cards()
-        job3.add_end_evoke_listener(self.start_next_player_turn)
 
     def update(self, dt):
         self._job_manager.update(dt)
@@ -1000,10 +1174,10 @@ class GameManager(GameLogicActor):
     def start_next_player_turn(self):
         next_player_index = (self.player_turn + 1) % len(self._player_status_dict)
         player = self.players[next_player_index]
-        player.start_turn()
+        return player.start_turn()
 
 class Game:
-    def __init__(self):
+    def __init__(self, num_of_players=2):
         self.clock = pygame.time.Clock()
         self.update_object_set = set()
         self.game_end = False
@@ -1014,17 +1188,29 @@ class Game:
             self.update_object_set.add(game_logic_actor)
             game_logic_actor.start()
 
-    def main(self):
+    def update(self):
         dt = self.clock.tick(60)/1000
+        for o in self.update_object_set:
+            o.update(dt)
+
+    def main(self):
+        player_1 = PlayerAgent(self.game_manager, AIPlayerInput())
+        self.game_manager.add_player(player_1)
+        player_2 = PlayerAgent(self.game_manager, AIPlayerInput())
+        self.game_manager.add_player(player_2)
+        player_3 = PlayerAgent(self.game_manager, AIPlayerInput())
+        self.game_manager.add_player(player_3)
+        player_1.draw_start_cards()
+        player_2.draw_start_cards()
+        player_3.draw_start_cards().add_end_evoke_listener(self.game_manager.start_next_player_turn)
         while not self.game_end:
-            for o in self.update_object_set:
-                o.update(dt)
+            self.update()
             pygame.time.delay(30)
 
 if __name__ == "__main__":
     Game().main()
-    #deck = Deck()
-    #deck.print_deck()
+    # deck = Deck()
+    # deck.print_deck()
 
     # c = CollectionOfCards(["red 5", "red 7", "red 9"])
     # c2 = CollectionOfCards(["red 6", "red 8"])
