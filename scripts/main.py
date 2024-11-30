@@ -377,7 +377,6 @@ class PlayerOptions(Enum):
     START_TURN = 4
     START_DRAW_FROM_OTHER_PLAYER = 5
     SELECT_CARD_FROM_OTHER_PLAYER = 6
-    DESELECT_CARD_FROM_OTHER_PLAYER = 13
     DRAW_CARD_FROM_PLAYER = 7
     END_DRAW_FROM_OTHER_PLAYER = 8
     SELECT_CARD_FROM_COLLECTION = 9
@@ -838,6 +837,17 @@ def draw_card_from_other_player_wrapper(player, other_player):
 
     return draw_card
 
+def end_turn_wrapper(player):
+    def end_turn():
+        game_manager = player.game_manager
+        deck = game_manager.deck
+        buffer = game_manager.draw_card_buffer
+        cards = buffer.pop_all_cards()
+        for card in cards:
+            deck.push_card(card)
+        print(f"{len(cards)} return from the buffer to the deck")
+    return end_turn
+
 class PlayerDrawStartCardJob(PlayerGameJob):
     def __init__(self, deck , player, duration = 1):
         super().__init__(PlayerOptions.DRAW_START_5_CARDS, player, draw_start_card_wrapper(deck, player), duration = duration)
@@ -919,7 +929,8 @@ class DiscardSelectedFromCollectionJob(PlayerGameJob):
         
 class EndTurnJob(PlayerGameJob):
     def __init__(self, player, duration = 1):
-        super().__init__(PlayerOptions.PASS, player, player.game_manager.get_player_status(player).end_turn, duration = duration)
+        super().__init__(PlayerOptions.PASS, player, end_turn_wrapper(player), duration = duration)
+        self.add_start_evoke_listener(player.game_manager.get_player_status(player).end_turn)
         self.add_start_evoke_listener(player.player_input.deactivate)
         self.add_end_evoke_listener(player.game_manager.start_next_player_turn)
 
@@ -1177,6 +1188,7 @@ class GameManager(GameLogicActor):
         next_player_index = (self.player_turn + 1) % len(self._player_status_dict)
         player = self.players[next_player_index]
         return player.start_turn()
+
 
 class Game:
     def __init__(self, num_of_players=2):
