@@ -4,7 +4,7 @@ import random
 from enum import Enum
 
 # when you want to mute all the print in the module, this is a good way
-# print = lambda x : None
+print = lambda x : None
 
 def verify_cards(string_list):
     checked_list = []

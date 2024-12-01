@@ -316,6 +316,7 @@ class MainScreen(ScreenBase):
         animation.play_animation(title_image, alpha_animation_sequence, layer=1)
         animation.play_animation(card_yellow_1, hop_with_overshoot_sequence("rotation2d",card_yellow_1.rotation2d, euler_angle_to_rotation(5),0,4,hop_time=0.7))
         animation.play_animation(card_yellow_3, hop_with_overshoot_sequence("rotation2d",card_yellow_3.rotation2d, euler_angle_to_rotation(-5),2,2,hop_time=0.7))
+        animation.play_animation(card_yellow_2, vibrate_once_2d("rotation2d", card_yellow_2.rotation2d, (0.1, 0.1), 0.5))
 
         for card in start_screen_lower_group:
             pretime += 0.1

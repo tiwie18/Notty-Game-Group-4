@@ -163,6 +163,19 @@ class OvershootCurve(AnimationCurve):
         return (base + overshoot) * (self.end - self.start) + self.start
 
 
+class VibrateCurve(AnimationCurve):
+    def __init__(self, start, duration, amplitude = 1):
+        self.start = start
+        self.duration = duration
+        self.amplitude = amplitude
+
+    def evaluate(self, t):
+        x = t / self.duration
+        u = x - 0.5
+        fx = math.sin(3 * math.pi * u) + math.sin(math.pi * u)
+        return fx * self.amplitude + self.start
+
+
 class HopWithOvershootCurve(AnimationCurve):
     def __init__(self, start, offset, duration):
         super().__init__()
@@ -316,7 +329,6 @@ def ease_in_out_1d(property_name, start_pos, end_pos, duration=1):
     animation_task.bind_property(property_name, curve)
     return animation_task
 
-
 def ping_pong(property_name, start_pos, end_pos, duration):
     animation_task = AnimationTask(duration=duration, loop=True)
     curve_x = PingPongCurve(start_pos[0], end_pos[0], duration * 0.5)
@@ -324,7 +336,6 @@ def ping_pong(property_name, start_pos, end_pos, duration):
     _2d_curve = Animation2DCurve(curve_x, curve_y)
     animation_task.bind_property(property_name, _2d_curve)
     return animation_task
-
 
 def overshoot_2d(property_name, start_pos, end_pos, duration, overshoot = 1):
     animation_task = AnimationTask(duration=duration, loop=False)
@@ -334,7 +345,6 @@ def overshoot_2d(property_name, start_pos, end_pos, duration, overshoot = 1):
     animation_task.bind_property(property_name, _2d_curve)
     return animation_task
 
-
 def hop_with_overshoot_2d(property_name, start_pos, offset, duration):
     animation_task = AnimationTask(duration=duration, loop=False)
     curve_x = HopWithOvershootCurve(start_pos[0], offset[0], duration)
@@ -342,7 +352,6 @@ def hop_with_overshoot_2d(property_name, start_pos, offset, duration):
     _2d_curve = Animation2DCurve(curve_x, curve_y)
     animation_task.bind_property(property_name, _2d_curve)
     return animation_task
-
 
 def hop_2d(property_name, start_pos, offset, duration=1):
     animation_task = AnimationTask(duration=duration, loop=False)
@@ -352,6 +361,13 @@ def hop_2d(property_name, start_pos, offset, duration=1):
     animation_task.bind_property(property_name, _2d_curve)
     return animation_task
 
+def vibrate_once_2d(property_name, start_pos, amplitude, duration):
+    animation_task = AnimationTask(duration=duration, loop=True)
+    curve_x = VibrateCurve(start_pos[0], duration, amplitude[0])
+    curve_y = VibrateCurve(start_pos[1], duration, amplitude[1])
+    _2d_curve = Animation2DCurve(curve_x, curve_y)
+    animation_task.bind_property(property_name, _2d_curve)
+    return animation_task
 
 def constant_2d(property_name, constant2d, duration=1):
     animation_task = AnimationTask(duration=duration, loop=False)
