@@ -62,13 +62,13 @@ def pop_up_buttons(button_list, pretime = 0, posttime = 1):
         pretime += 0.1
         posttime -= 0.1
 
-
 class VisualObject:
     def __init__(self, position2d=(0, 0), scale2d=(1, 1), rotation2d=(1, 0), alpha=255):
         self.position2d = position2d
         self.scale2d = scale2d
         self.rotation2d = rotation2d
         self.alpha = alpha
+        self.visible = True
         pass
 
     @property
@@ -160,6 +160,8 @@ class RenderableImage(VisualObject):
             self._store_cache()
 
     def draw(self, screen):
+        if not self.visible:
+            return
         self._update_cache_if_dirty()
         rect = self._cached_transformed_image.get_rect(center=self.position2d)
         screen.blit(self._cached_transformed_image, rect.topleft)
@@ -222,15 +224,29 @@ class ClickableLabel(Label):
         self.img_src_normal = self.image_path1
         self.img_src_hover = self.image_path2
         self.click_listener_list = []
+        self._cursor_inside = False
+        self.cursor_enter_listener_list = []
+        self.cursor_exit_listener_list = []
+        self.enabled = True
 
     def is_inside(self, pos):
         return self.pos[0] - self.width * 0.5 <= pos[0] <= self.pos[0] + self.width * 0.5 and \
             self.pos[1] - self.height * 0.5 <= pos[1] <= self.pos[1] + self.height * 0.5
 
     def update(self):
+        if not self.enabled:
+            return
         if self.is_inside(pygame.mouse.get_pos()):
+            if not self._cursor_inside:
+                self._cursor_inside = True
+                for listener in self.cursor_enter_listener_list:
+                    listener()
             self.image_src = self.img_src_hover
         else:
+            if self._cursor_inside:
+                self._cursor_inside = False
+                for listener in self.cursor_exit_listener_list:
+                    listener()
             self.image_src = self.img_src_normal
 
     def mouseup(self, event):
@@ -238,12 +254,28 @@ class ClickableLabel(Label):
             self.click()
 
     def click(self):
+        if not self.enabled:
+            return 
         for listener in self.click_listener_list:
             listener()
 
     def add_click_listener(self, function):
         self.click_listener_list.append(function)
 
+    def add_on_cursor_enter_listener(self, function):
+        self.cursor_enter_listener_list.append(function)
+
+    def add_on_cursor_exit_listener(self, function):
+        self.cursor_exit_listener_list.append(function)
+
+def set_label_cursor_anim_effect(label:ClickableLabel):
+    start_angle = label.euler_angle
+    start_scale2d = label.scale2d
+    end_scale2d = math_util.vec_2d_mul(start_scale2d,1.2)
+    amplitude = 5
+    label.add_on_cursor_enter_listener(lambda : animation.play_animation(label, vibrate_once_1d("euler_angle",start_angle,amplitude,0.2)))
+    label.add_on_cursor_enter_listener(lambda : animation.play_animation(label, overshoot_2d("scale2d",start_scale2d, end_scale2d,0.2), layer=1))
+    label.add_on_cursor_exit_listener(lambda: animation.play_animation(label, overshoot_2d("scale2d",  end_scale2d, start_scale2d,0.2), layer=1))
 
 class PlayGameLabel(ClickableLabel):
     def click(self):
@@ -424,10 +456,13 @@ class Card(RenderableImage):
 
     def update_position(self, new_pos):
         """Update both the display position and collision rect"""
+        old_pos = self.position2d
         self.position2d = new_pos
         hover_adjusted_pos = (new_pos[0], new_pos[1] + self.hover_offset)
         self.rect.x = hover_adjusted_pos[0] - CARD_WIDTH / 2
         self.rect.y = hover_adjusted_pos[1] - CARD_HEIGHT / 2
+        # Animation Magic Touch Here
+        animation.play_animation(self,move_to("position2d",old_pos, new_pos, 0.2))
 
     def contains_point(self, pos):
         """Check if a point is within the card's clickable area"""
@@ -520,6 +555,7 @@ class Player(core.IPlayerAgentListener):
             self._arrange_horizontal(stacked)
         else:
             self._arrange_vertical(stacked)
+
 
     def _arrange_horizontal(self, stacked):
         """Arrange cards horizontally (for bottom and top players)"""
@@ -902,6 +938,7 @@ class GameState:
             visual_card = Card(logic_card.color, logic_card.number)
             visual_card.set_face_down()
             visual_card.logic_card = logic_card
+            visual_card.position2d = (WINDOW_WIDTH * 0.5, WINDOW_HEIGHT * 0.5)
             self.logic_card_to_card_mapping[logic_card] = visual_card
             deck.append(visual_card)
         print(f"Deck Created {len(deck)} cards")
@@ -1115,7 +1152,10 @@ class GameState:
         if card not in current_player.cards:
             raise ValueError(f"{card} does not exist in current player")
         card.selected = False
-        current_player.selected_cards.remove(card)
+        if card in current_player.selected_cards :
+            current_player.selected_cards.remove(card)
+        else:
+            print("This branch should not be executed")
         print(f"Card {card} deselected")
 
     def take_opponent_card(self):
@@ -1156,6 +1196,7 @@ class GameState:
             card.hover_offset = 0
             card.is_raised = False
             card.highlighted = False
+            card.update_position((WINDOW_WIDTH * 0.5, WINDOW_HEIGHT * 0.5))
         self._sync_deck_card()
         random.shuffle(self.deck)
         current_player.update_card_positions()
@@ -1404,6 +1445,9 @@ class HomeScreen(ScreenBase):
         self.objects.append(self.exit_label)
 
         # Animation Time!
+        set_label_cursor_anim_effect(self.play_label)
+        set_label_cursor_anim_effect(self.rules_label)
+        set_label_cursor_anim_effect(self.exit_label)
         pop_up_buttons([self.play_label, self.rules_label, self.exit_label])
 
 class RuleScreen(ScreenBase):
@@ -1441,6 +1485,8 @@ class StartGameScreen(ScreenBase):
         self.objects.append(self.three_player_label)
         print("Added labels to objects list")  # Debug print
 
+        set_label_cursor_anim_effect(self.two_player_label)
+        set_label_cursor_anim_effect(self.three_player_label)
         pop_up_buttons([self.two_player_label, self.three_player_label])
 
     def update(self):
@@ -1549,7 +1595,10 @@ class TwoPlayerScreen(ScreenBase):
                 "resources/images/ui/labels/clickable_quit_game_label.png",
                 (WINDOW_WIDTH / 1.07, WINDOW_HEIGHT / 1.075),
                 0.08),
-            'end_draw': EndDrawLabel(self.game_state)
+            'end_draw': EndDrawLabel(self.game_state),
+            'end_draw_from_player': ClickableLabel(image_path1="resources/images/ui/labels/end_draw_label.png",
+                                                   image_path2="resources/images/ui/labels/clickable_end_draw_label.png",
+                                                   pos=(WINDOW_WIDTH / 2 - CARD_WIDTH - 100, WINDOW_HEIGHT / 3),scale_factor=0.1),
         }
 
         self.buttons['pass'].add_click_listener(self.game_state.human_input.pass_turn)
@@ -1562,12 +1611,23 @@ class TwoPlayerScreen(ScreenBase):
         self.buttons['drawfromplayer'].add_click_listener(draw_from_player)
         self.buttons['discard'].add_click_listener(self.game_state.human_input.dispose_selected)
         self.buttons['deck'].add_click_listener(self.game_state.human_input.draw_card_from_deck)
+        self.buttons['end_draw_from_player'].add_click_listener(self.game_state.human_input.draw_from_other_player)
 
         self.buttons['playforme'].add_click_listener(self.handle_play_for_me)
         self.buttons['quitgame'].add_click_listener(self.handle_quitgame)
 
         # Add buttons to objects list
         self.objects.extend(self.buttons.values())
+
+        button_list = list(self.buttons.values())
+        for button in button_list:
+            set_label_cursor_anim_effect(button)
+        pop_up_buttons(button_list)
+
+    def set_enable_end_draw_from_other_player(self, enabled):
+        button = self.buttons['end_draw_from_player']
+        button.visible = enabled
+        button.enabled = enabled
 
     def handle_card_click(self, pos):
         """Handle clicking on cards"""
@@ -1703,6 +1763,16 @@ class TwoPlayerScreen(ScreenBase):
             self.buttons['deck'].image_src = self.buttons['deck'].img_src_hover
         else:
             self.buttons['deck'].image_src = self.buttons['deck'].img_src_normal
+
+        if self.game_state.current_player == 0 and self.game_state.selected_opponent_card is not None:
+            button = self.buttons['end_draw_from_player']
+            button.visible = True
+            button.enabled = True
+        else:
+            button = self.buttons['end_draw_from_player']
+            button.visible = False
+            button.enabled = False
+
 
 class ThreePlayerScreen(ScreenBase):
     def __init__(self):

@@ -362,11 +362,17 @@ def hop_2d(property_name, start_pos, offset, duration=1):
     return animation_task
 
 def vibrate_once_2d(property_name, start_pos, amplitude, duration):
-    animation_task = AnimationTask(duration=duration, loop=True)
+    animation_task = AnimationTask(duration=duration, loop=False)
     curve_x = VibrateCurve(start_pos[0], duration, amplitude[0])
     curve_y = VibrateCurve(start_pos[1], duration, amplitude[1])
     _2d_curve = Animation2DCurve(curve_x, curve_y)
     animation_task.bind_property(property_name, _2d_curve)
+    return animation_task
+
+def vibrate_once_1d(property_name, start_pos, amplitude, duration):
+    animation_task = AnimationTask(duration=duration, loop=False)
+    curve = VibrateCurve(start_pos, duration, amplitude)
+    animation_task.bind_property(property_name, curve)
     return animation_task
 
 def constant_2d(property_name, constant2d, duration=1):

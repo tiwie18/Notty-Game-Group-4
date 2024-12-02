@@ -1169,6 +1169,7 @@ class GameManager(GameLogicActor):
         self.player_turn = -1
         game_instance.add_actor(self)
         self._game_result_listeners = []
+        self._job_manager.push_job(GameJob( lambda :None, 0.5))
 
     @property
     def deck(self):
@@ -1260,10 +1261,3 @@ class Game:
 
 if __name__ == "__main__":
     Game().main()
-    # deck = Deck()
-    # deck.print_deck()
-
-    # c = CollectionOfCards(["red 5", "red 7", "red 9"])
-    # c2 = CollectionOfCards(["red 6", "red 8"])
-    # candidate_card_list = probability_of_valid_group([c, c2])
-    # print(candidate_card_list)
