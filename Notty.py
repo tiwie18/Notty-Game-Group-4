@@ -777,8 +777,9 @@ class HumanPlayerInput(core.PlayerInput):
     def start_draw_from_other_player(self, other_player):
         if not self.active:
             return
-        self.player.start_draw_from_other_player(other_player)
-        self.other_player_memory = other_player
+        if self.player.card_count() < 20:
+            self.player.start_draw_from_other_player(other_player)
+            self.other_player_memory = other_player
 
     def select_from_other_player(self, card):
         if not self.active:
