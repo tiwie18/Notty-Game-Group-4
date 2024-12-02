@@ -4,7 +4,7 @@ import random
 from enum import Enum
 
 # when you want to mute all the print in the module, this is a good way
-print = lambda x : None
+# print = lambda x : None
 
 def verify_cards(string_list):
     checked_list = []
@@ -457,11 +457,18 @@ class AIPlayerInput(PlayerInput):
             else:
                 self.player.end_draw_card_from_deck()
         elif self.valid_group_memory is None:
-            self.valid_group_memory = self.player.find_largest_valid_group()
-            if self.valid_group_memory is None:
-                self.player.pass_turn()
+            current_selected = self.player.selected_as_list()
+            card_need_deselect = None
+            if len(current_selected) > 0:
+                card_need_deselect = current_selected.pop()
+            if card_need_deselect is not None:
+                self.player.deselect_card(card_need_deselect)
             else:
-                self.player.select_card(self.valid_group_memory.pop())
+                self.valid_group_memory = self.player.find_largest_valid_group()
+                if self.valid_group_memory is None:
+                    self.player.pass_turn()
+                else:
+                    self.player.select_card(self.valid_group_memory.pop())
         elif self.valid_group_memory is not None:
             if len(self.valid_group_memory) > 0:
                 card = self.valid_group_memory.pop()
@@ -506,7 +513,7 @@ class IPlayerAgentListener:
     def select_from_other_player(self, other_player, card, job):
         pass
 
-    def draw_from_other_player(self, other_player, job):
+    def draw_from_other_player(self, other_player, card, job):
         pass
 
     def end_draw_from_other_player(self, job):
@@ -569,6 +576,15 @@ class PlayerAgent(GameLogicActor):
         temp = self._selected_card_set
         self._selected_card_set = set()
         return list(temp)
+
+    def clear_selected(self):
+        self._selected_card_set.clear()
+
+    def clear_other_selected(self):
+        self._other_selected_card = None
+
+    def other_selected_card(self):
+        return self._other_selected_card
 
     def pop_other_selected(self):
         self._collection.remove_card(self._other_selected_card)
@@ -672,8 +688,9 @@ class PlayerAgent(GameLogicActor):
 
     def draw_from_other_player(self, other_player):
         job = DrawFromOtherPlayerJob(self, other_player)
+        card = other_player.other_selected_card()
         for listener in self._action_listeners:
-            listener.draw_from_other_player(other_player, job)
+            listener.draw_from_other_player(other_player, card, job)
         return self.send_request(job)
 
     def end_draw_from_other_player(self):
@@ -846,6 +863,9 @@ def end_turn_wrapper(player):
         for card in cards:
             deck.push_card(card)
         print(f"{len(cards)} return from the buffer to the deck")
+        for p in game_manager.players:
+            p.clear_selected()
+            p.clear_other_selected()
     return end_turn
 
 class PlayerDrawStartCardJob(PlayerGameJob):
@@ -890,20 +910,20 @@ class StartDrawCardFromOtherPlayerJob(PlayerGameJob):
         self.add_end_evoke_listener(player.player_input.evaluate_situation_and_response)
 
 class DrawFromOtherPlayerJob(PlayerGameJob):
-    def __init__(self, player, other_player, duration = 0.3):
+    def __init__(self, player, other_player, duration = 1):
         super().__init__(PlayerOptions.DRAW_CARD_FROM_PLAYER, player, draw_card_from_other_player_wrapper(player, other_player),duration)
         self.add_start_evoke_listener(
             lambda: player.game_manager.get_player_status(player).draw_from_other_player())
         self.add_end_evoke_listener(player.player_input.evaluate_situation_and_response)
 
 class SelectFromOtherPlayerJob(PlayerGameJob):
-    def __init__(self, player, other_player, card, duration = 1):
+    def __init__(self, player, other_player, card, duration = 0.1):
         super().__init__(PlayerOptions.SELECT_CARD_FROM_OTHER_PLAYER, player, select_card_from_other_player_wrapper(other_player, card), duration)
         self.add_start_evoke_listener(player.game_manager.get_player_status(player).select_from_other_player)
         self.add_end_evoke_listener(player.player_input.evaluate_situation_and_response)
 
 class EndDrawFromOtherPlayerJob(PlayerGameJob):
-    def __init__(self, player, duration = 1):
+    def __init__(self, player, duration = 0.1):
         super().__init__(PlayerOptions.END_DRAW_FROM_OTHER_PLAYER, player, (lambda : print('End draw from other player')),duration)
         self.add_start_evoke_listener(player.game_manager.get_player_status(player).end_draw_from_other_player)
         self.add_end_evoke_listener(player.player_input.evaluate_situation_and_response)
@@ -925,6 +945,7 @@ class DiscardSelectedFromCollectionJob(PlayerGameJob):
         super().__init__(PlayerOptions.DISPOSE_VALID_GROUP, player, discard_selected_wrapper(player), duration=duration)
         self.add_start_evoke_listener(player.game_manager.get_player_status(player).dispose_selected_valid_group)
         self.add_start_evoke_listener(player.game_manager.deck.shuffle)
+        self.add_start_evoke_listener(lambda: player.game_manager.check_winner(player))
         self.add_end_evoke_listener(player.player_input.evaluate_situation_and_response)
         
 class EndTurnJob(PlayerGameJob):
@@ -939,11 +960,14 @@ class JobEvokeSystem:
         import queue
         self._job_queue = queue.Queue()
         self._current_job = None
+        self.paused = False
 
     def push_job(self, job):
         self._job_queue.put(job)
 
     def update(self, dt):
+        if self.paused:
+            return
         if self._current_job is not None:
             self._current_job.update(dt)
             if self._current_job.finished():
@@ -1132,14 +1156,7 @@ class GameManager(GameLogicActor):
         self.game_instance = game_instance
         self.player_turn = -1
         game_instance.add_actor(self)
-
-        # last_job = None
-        # for _ in range(num_of_players):
-        #     player_1 = PlayerAgent(self, AIPlayerInput())
-        #     self.add_player(player_1)
-        #     last_job = player_1.draw_start_cards()
-        # last_job.add_end_evoke_listener(self.start_next_player_turn)
-        #
+        self._game_result_listeners = []
 
     @property
     def deck(self):
@@ -1161,6 +1178,9 @@ class GameManager(GameLogicActor):
 
     def add_actor(self, actor):
         self.game_instance.add_actor(actor)
+
+    def add_game_result_listener(self, game_result_listener):
+        self._game_result_listeners.append(game_result_listener)
 
     def receive_request(self, job):
         if self.check_request(job):
@@ -1188,6 +1208,12 @@ class GameManager(GameLogicActor):
         next_player_index = (self.player_turn + 1) % len(self._player_status_dict)
         player = self.players[next_player_index]
         return player.start_turn()
+
+    def check_winner(self, player: PlayerAgent):
+        if player.card_count() == 0:
+            for game_result_listener in self._game_result_listeners:
+                game_result_listener(player)
+            self._job_manager.paused = True
 
 
 class Game:
