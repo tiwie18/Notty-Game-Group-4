@@ -302,6 +302,10 @@ class QuitGameLabel(ClickableLabel):
 
 
 class BackLabel(ClickableLabel):
+    def __init__(self, image_path1, image_path2, pos, scale_factor=0.1):
+        super().__init__(image_path1, image_path2, pos, scale_factor)
+        self.click_listener_list = []
+
     def click(self):
         global current_screen
         current_screen = HomeScreen()
@@ -381,8 +385,7 @@ class NewGameLabel(ClickableLabel):
 
 class ExitGameLabel(ClickableLabel):
     def click(self):
-        global game_over
-        game_over = True
+        pygame.quit()
 
 
 class DeckLabel(ClickableLabel):
@@ -1478,11 +1481,18 @@ class StartGameScreen(ScreenBase):
             (WINDOW_WIDTH / 1.35, WINDOW_HEIGHT / 1.65), 0.15)
 
         print("Created ThreePlayerLabel")  # Debug print
+        # Initialize back label
+        self.back_label = BackLabel(
+            "resources/images/ui/labels/back_label.png",
+            "resources/images/ui/labels/clickable_back_label.png",
+            (WINDOW_WIDTH / 1.15, WINDOW_HEIGHT / 1.1), 0.1)
+        print("Created BackLabel")  # Debug print
 
         # Add labels to objects list
         self.objects = []
         self.objects.append(self.two_player_label)
         self.objects.append(self.three_player_label)
+        self.objects.append(self.back_label)
         print("Added labels to objects list")  # Debug print
 
         set_label_cursor_anim_effect(self.two_player_label)
@@ -1544,6 +1554,19 @@ class EndDrawLabel(ClickableLabel):
             # self.game_state.confirm_drawn_cards()
             self.game_state.human_input.end_draw_card_from_deck()
 
+
+class EndTurnLabel(ClickableLabel):
+    def __init__(self, game_state):
+        super().__init__(
+            "resources/images/ui/labels/end_turn_label.png",
+            "resources/images/ui/labels/clickable_end_turn_label.png",
+            (WINDOW_WIDTH/1.15, WINDOW_HEIGHT / 2),  # Position right of deck
+            0.1  # Scale factor
+        )
+    def click(self):
+        pass
+
+
 class TwoPlayerScreen(ScreenBase):
     def __init__(self):
         super().__init__(background_filename='resources/images/ui/screens/PlayScreen.png')
@@ -1563,13 +1586,13 @@ class TwoPlayerScreen(ScreenBase):
             'pass': ClickableLabel(
                 "resources/images/ui/labels/game_pass_label.png",
                 "resources/images/ui/labels/clickable_game_pass_label.png",
-                (WINDOW_WIDTH / 1.5, WINDOW_HEIGHT / 1.075),
+                (WINDOW_WIDTH / 1.7, WINDOW_HEIGHT / 1.075),
                 0.065
             ),
             'drawfromdeck': ClickableLabel(
                 "resources/images/ui/labels/draw_from_deck_label.png",
                 "resources/images/ui/labels/clickable_draw_from_deck_label.png",
-                (WINDOW_WIDTH / 3.4, WINDOW_HEIGHT / 1.6),
+                (WINDOW_WIDTH / 2.9, WINDOW_HEIGHT / 1.6),
                 0.15
             ),
             'drawfromplayer': ClickableLabel(
@@ -1581,13 +1604,13 @@ class TwoPlayerScreen(ScreenBase):
             'discard': ClickableLabel(
                 "resources/images/ui/labels/discard_label.png",
                 "resources/images/ui/labels/clickable_discard_label.png",
-                (WINDOW_WIDTH / 2.05, WINDOW_HEIGHT / 1.075),
+                (WINDOW_WIDTH / 2.2, WINDOW_HEIGHT / 1.075),
                 0.065
             ),
             'playforme': ClickableLabel(
                 "resources/images/ui/labels/play_for_me_label.png",
                 "resources/images/ui/labels/clickable_play_for_me_label.png",
-                (WINDOW_WIDTH / 3.85, WINDOW_HEIGHT / 1.075),
+                (WINDOW_WIDTH / 3.65, WINDOW_HEIGHT / 1.075),
                 0.065
             ),
             'quitgame': QuitGameLabel(
@@ -1596,6 +1619,11 @@ class TwoPlayerScreen(ScreenBase):
                 (WINDOW_WIDTH / 1.07, WINDOW_HEIGHT / 1.075),
                 0.08),
             'end_draw': EndDrawLabel(self.game_state),
+            'end_turn': ClickableLabel(
+                "resources/images/ui/labels/end_turn_label.png",
+                "resources/images/ui/labels/clickable_end_turn_label.png",
+                (WINDOW_WIDTH / 1.35, WINDOW_HEIGHT / 1.075),
+                0.06),
             'end_draw_from_player': ClickableLabel(image_path1="resources/images/ui/labels/end_draw_label.png",
                                                    image_path2="resources/images/ui/labels/clickable_end_draw_label.png",
                                                    pos=(WINDOW_WIDTH / 2 - CARD_WIDTH - 100, WINDOW_HEIGHT / 3),scale_factor=0.1),
@@ -1603,6 +1631,7 @@ class TwoPlayerScreen(ScreenBase):
 
         self.buttons['pass'].add_click_listener(self.game_state.human_input.pass_turn)
         self.buttons['drawfromdeck'].add_click_listener(self.game_state.human_input.start_draw_from_deck)
+        self.buttons['end_turn'].add_click_listener(self.game_state.human_input.pass_turn)
 
         def draw_from_player():
             other_player = self.game_state.players[1].logic_player
@@ -1787,46 +1816,51 @@ class ThreePlayerScreen(ScreenBase):
             'deck': ClickableLabel(
                 "resources/images/ui/labels/deck_label.png",
                 "resources/images/ui/labels/clickable_deck_label.png",
-                (WINDOW_WIDTH / 2.25, WINDOW_HEIGHT / 2.18),
-                0.175
+                (WINDOW_WIDTH / 2.10, WINDOW_HEIGHT / 2.18),
+                0.16
             ),
             'pass': ClickableLabel(
                 "resources/images/ui/labels/game_pass_label.png",
                 "resources/images/ui/labels/clickable_game_pass_label.png",
-                (WINDOW_WIDTH / 1.5, WINDOW_HEIGHT / 1.075),
-                0.09
+                (WINDOW_WIDTH / 1.7, WINDOW_HEIGHT / 1.075),
+                0.065
             ),
             'drawfromdeck': ClickableLabel(
                 "resources/images/ui/labels/draw_from_deck_label.png",
                 "resources/images/ui/labels/clickable_draw_from_deck_label.png",
-                (WINDOW_WIDTH / 3.9, WINDOW_HEIGHT / 1.45),
-                0.19
+                (WINDOW_WIDTH / 2.9, WINDOW_HEIGHT / 1.6),
+                0.15
             ),
             'drawfromplayer': ClickableLabel(
                 "resources/images/ui/labels/draw_from_player_label.png",
                 "resources/images/ui/labels/clickable_draw_from_player_label.png",
-                (WINDOW_WIDTH / 1.5, WINDOW_HEIGHT / 1.45),
-                0.19
+                (WINDOW_WIDTH / 1.6, WINDOW_HEIGHT / 1.6),
+                0.15
             ),
             'discard': ClickableLabel(
                 "resources/images/ui/labels/discard_label.png",
                 "resources/images/ui/labels/clickable_discard_label.png",
-                (WINDOW_WIDTH / 2, WINDOW_HEIGHT / 1.075),
-                0.09
+                (WINDOW_WIDTH / 2.2, WINDOW_HEIGHT / 1.075),
+                0.065
             ),
             'playforme': ClickableLabel(
                 "resources/images/ui/labels/play_for_me_label.png",
                 "resources/images/ui/labels/clickable_play_for_me_label.png",
-                (WINDOW_WIDTH / 4, WINDOW_HEIGHT / 1.075),
-                0.09
+                (WINDOW_WIDTH / 3.65, WINDOW_HEIGHT / 1.075),
+                0.065
             ),
             'quitgame': QuitGameLabel(
                 "resources/images/ui/labels/quit_game_label.png",
                 "resources/images/ui/labels/clickable_quit_game_label.png",
-                (WINDOW_WIDTH / 1.1, WINDOW_HEIGHT / 1.1),
-                0.1),
-            'end_draw': EndDrawLabel(self.game_state)
-        }
+                (WINDOW_WIDTH / 1.07, WINDOW_HEIGHT / 1.075),
+                0.08),
+            'end_draw': EndDrawLabel(self.game_state),
+            'end_turn': ClickableLabel(
+                "resources/images/ui/labels/end_turn_label.png",
+                "resources/images/ui/labels/clickable_end_turn_label.png",
+                (WINDOW_WIDTH / 1.35, WINDOW_HEIGHT / 1.075),
+                0.06)
+            }
 
         # Set up button click handlers
         self.buttons['pass'].add_click_listener(self.game_state.human_input.pass_turn)
