@@ -1491,17 +1491,18 @@ class TwoPlayerScreen(ScreenBase):
         """Handle auto-play button click"""
         ai_input = core.AIPlayerInput()
         self.game_state.players[0].logic_player.set_input(ai_input)
-        ai_input.add_on_deactivate_listener(self.resume_play_for_me)
+
+        def resume_play_for_me():
+            """Resume play button click"""
+            ai_input = self.game_state.players[0].logic_player.player_input
+            human_input = self.game_state.human_input
+            if isinstance(ai_input, core.AIPlayerInput):
+                ai_input.player = None
+                self.game_state.players[0].logic_player.set_input(human_input)
+
+        ai_input.add_on_deactivate_listener(resume_play_for_me)
         ai_input.activate()
         ai_input.evaluate_situation_and_response()
-
-    def resume_play_for_me(self):
-        """Resume play button click"""
-        ai_input = self.game_state.players[0].logic_player.player_input
-        human_input = self.game_state.human_input
-        if isinstance(ai_input, core.AIPlayerInput):
-            ai_input.player = None
-            self.game_state.players[0].logic_player.set_input(human_input)
 
     def handle_quitgame(self):
         if not self.game_state.animation_in_progress:
@@ -1622,12 +1623,19 @@ class ThreePlayerScreen(ScreenBase):
         }
 
         # Set up button click handlers
-        self.buttons['pass'].add_click_listener(self.handle_pass)
-        self.buttons['drawfromdeck'].add_click_listener(self.handle_drawfromdeck)
-        self.buttons['drawfromplayer'].add_click_listener(self.handle_drawfromplayer)
-        self.buttons['discard'].add_click_listener(self.handle_discard)
+        self.buttons['pass'].add_click_listener(self.game_state.human_input.pass_turn)
+        self.buttons['drawfromdeck'].add_click_listener(self.game_state.human_input.start_draw_from_deck)
+
+        def handle_drawfromplayer():
+            current_idx = self.game_state.current_player
+            other_idx = (current_idx + 1) % 3  # For now just use next player
+            other_player = self.game_state.players[other_idx].logic_player
+            self.game_state.human_input.start_draw_from_other_player(other_player)
+
+        self.buttons['drawfromplayer'].add_click_listener(handle_drawfromplayer)
+        self.buttons['discard'].add_click_listener(self.game_state.human_input.dispose_selected)
+        self.buttons['deck'].add_click_listener(self.game_state.human_input.draw_card_from_deck)
         self.buttons['playforme'].add_click_listener(self.handle_play_for_me)
-        self.buttons['deck'].add_click_listener(self.handle_deck_click)
         self.buttons['quitgame'].add_click_listener(self.handle_quitgame)
 
         # Add buttons to objects list
@@ -1660,32 +1668,28 @@ class ThreePlayerScreen(ScreenBase):
 
         return False
 
-    def handle_pass(self):
-        """Handle pass button click"""
-        if not self.game_state.animation_in_progress:
-            self.game_state.end_turn()
-
-    def handle_draw_click(self):
-        """Handle draw button click"""
-        if not self.game_state.animation_in_progress:
-            self.game_state.toggle_draw_mode()
-
-    def handle_deck_click(self):
-        """Handle clicking the deck"""
-        if not self.game_state.animation_in_progress:
-            self.game_state.draw_single_card()
-
-    def handle_discard(self):
-        """Handle discard button click"""
-        if not self.game_state.animation_in_progress:
-            current_player = self.game_state.players[self.game_state.current_player]
-            if len(current_player.selected_cards) >= 3:
-                if self.game_state.is_valid_group(current_player.selected_cards):
-                    self.game_state.discard_cards(current_player.selected_cards)
-
     def handle_play_for_me(self):
         """Handle auto-play button click"""
-        pass
+        ai_input = core.AIPlayerInput()
+        self.game_state.players[0].logic_player.set_input(ai_input)
+
+        def resume_play_for_me():
+            """Resume play button click"""
+            ai_input = self.game_state.players[0].logic_player.player_input
+            human_input = self.game_state.human_input
+            if isinstance(ai_input, core.AIPlayerInput):
+                ai_input.player = None
+                self.game_state.players[0].logic_player.set_input(human_input)
+
+        ai_input.add_on_deactivate_listener(resume_play_for_me)
+        ai_input.activate()
+        ai_input.evaluate_situation_and_response()
+
+    def handle_quitgame(self):
+        """Handle quit game button click"""
+        if not self.game_state.animation_in_progress:
+            global current_screen
+            current_screen = HomeScreen()
 
     def mouseup(self, event):
         """Handle mouse button release"""
@@ -1703,9 +1707,9 @@ class ThreePlayerScreen(ScreenBase):
     def keydown(self, event):
         """Handle keyboard input"""
         if event.key == K_SPACE:
-            self.game_state.take_opponent_card()
+            self.game_state.human_input.draw_from_other_player()
         elif event.key == K_RETURN:
-            self.game_state.end_turn()
+            self.game_state.human_input.pass_turn()
         elif event.key == K_ESCAPE:
             global current_screen
             current_screen = HomeScreen()
@@ -1754,6 +1758,7 @@ class ThreePlayerScreen(ScreenBase):
 
     def update(self):
         """Update game state"""
+        self.game_state.game_logic_server.update()  # Add this line
         for button in self.buttons.values():
             button.update()
 
