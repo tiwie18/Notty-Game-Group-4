@@ -589,7 +589,7 @@ class Player(core.IPlayerAgentListener):
             angle = -90 if self.position == 'left' else 90
             card.rotation2d = math_util.euler_angle_to_rotation(angle)
 
-    def flip_all_cards(self, face_up:bool=False):
+    def flip_all_cards(self, face_up: bool = False):
         if not face_up:
             for card in self.cards:
                 card.set_face_down()
@@ -602,41 +602,6 @@ class Player(core.IPlayerAgentListener):
         # Reverse the cards list to check from front to back
         for card in reversed(self.cards):
             if card.contains_point(pos):
-                # if self.game_state.draw_mode_active:
-                #     # In draw mode, force cards to stay down and just handle selection
-                #     card.is_raised = False
-                #     card.hover_offset = 0
-                #     card.selected = not card.selected
-                #     if card.selected:
-                #         self.selected_cards.append(card)
-                #     else:
-                #         if card in self.selected_cards:
-                #             self.selected_cards.remove(card)
-                #     self.update_card_positions()
-                # else:
-                #     # For normal mode, check if card is in stack
-                #     if card in self.stacked_cards:
-                #         card.selected = not card.selected
-                #         if card.selected:
-                #             card.is_raised = True
-                #             card.hover_offset = card.HOVER_DISTANCE
-                #             self.selected_cards.append(card)
-                #         else:
-                #             card.is_raised = False
-                #             card.hover_offset = 0
-                #             if card in self.selected_cards:
-                #                 self.selected_cards.remove(card)
-                #     else:
-                #         # For non-stacked cards, just toggle selection
-                #         card.is_raised = False
-                #         card.hover_offset = 0
-                #         card.selected = not card.selected
-                #         if card.selected:
-                #             self.selected_cards.append(card)
-                #         else:
-                #             if card in self.selected_cards:
-                #                 self.selected_cards.remove(card)
-                #     self.update_card_positions()
                 return card
         return None
 
@@ -748,6 +713,7 @@ class Player(core.IPlayerAgentListener):
         def select_other_player_card():
             visual_card = self.game_state.logic_card_to_visual_card(card)
             self.game_state.select_other_player_card(visual_card)
+
         job.add_start_evoke_listener(select_other_player_card)
 
     def draw_from_other_player(self, other_player, card, job):
@@ -756,6 +722,7 @@ class Player(core.IPlayerAgentListener):
             visual_card = self.game_state.logic_card_to_visual_card(card)
             visual_card.set_face_up()
             visual_other_player.update_card_positions()
+
         job.add_start_evoke_listener(flip_up_card)
 
     def end_draw_from_other_player(self, job):
@@ -766,9 +733,9 @@ class Player(core.IPlayerAgentListener):
                     card.hover_offset = 0
                     card.selected = False
                     card.set_face_up()
+
         job.add_start_evoke_listener(self.game_state.take_opponent_card)
         job.add_start_evoke_listener(flip_up_all_card)
-
 
 
 class HumanPlayerInput(core.PlayerInput):
@@ -1135,7 +1102,7 @@ class GameState:
         print(f"Card {card} deselected")
 
     def take_opponent_card(self):
-        if self.selected_opponent_card and not self.has_drawn_this_turn:
+        if self.selected_opponent_card:
             for player in self.players:
                 if self.selected_opponent_card in player.cards:
                     print("TAKE OPPONENT CARD")
@@ -1147,7 +1114,6 @@ class GameState:
                     assert len(diff_in) == 1
                     self.selected_opponent_card.highlighted = False
                     self.selected_opponent_card = None
-                    self.has_drawn_this_turn = True
                     return True
         return False
 
@@ -1452,13 +1418,6 @@ class TwoPlayerScreen(ScreenBase):
             'end_draw': EndDrawLabel(self.game_state)
         }
 
-        # Set up button click handlers
-        # self.buttons['pass'].add_click_listener(self.handle_pass)
-        # self.buttons['drawfromdeck'].add_click_listener(self.handle_drawfromdeck)
-        # self.buttons['drawfromplayer'].add_click_listener(self.handle_drawfromplayer)
-        # self.buttons['discard'].add_click_listener(self.handle_discard)
-        # self.buttons['deck'].add_click_listener(self.handle_deck_click)
-
         self.buttons['pass'].add_click_listener(self.game_state.human_input.pass_turn)
         self.buttons['drawfromdeck'].add_click_listener(self.game_state.human_input.start_draw_from_deck)
 
@@ -1535,8 +1494,17 @@ class TwoPlayerScreen(ScreenBase):
         """Handle auto-play button click"""
         ai_input = core.AIPlayerInput()
         self.game_state.players[0].logic_player.set_input(ai_input)
+        ai_input.add_on_deactivate_listener(self.resume_play_for_me)
         ai_input.activate()
         ai_input.evaluate_situation_and_response()
+
+    def resume_play_for_me(self):
+        """Resume play button click"""
+        ai_input = self.game_state.players[0].logic_player.player_input
+        human_input = self.game_state.human_input
+        if isinstance(ai_input, core.AIPlayerInput):
+            ai_input.player = None
+            self.game_state.players[0].logic_player.set_input(human_input)
 
     def handle_quitgame(self):
         if not self.game_state.animation_in_progress:

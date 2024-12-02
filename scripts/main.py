@@ -388,15 +388,27 @@ class PlayerInput:
     def __init__(self):
         self.player = None
         self.active = False
+        self.on_activate_listener_list = []
+        self.on_deactivate_listener_list = []
 
     def activate(self):
         self.active = True
+        for listener in self.on_activate_listener_list:
+            listener()
 
     def deactivate(self):
         self.active = False
+        for listener in self.on_deactivate_listener_list:
+            listener()
 
     def evaluate_situation_and_response(self):
         pass
+
+    def add_on_activate_listener(self, on_activate_listener):
+        self.on_activate_listener_list.append(on_activate_listener)
+
+    def add_on_deactivate_listener(self, on_deactivate_listener):
+        self.on_deactivate_listener_list.append(on_deactivate_listener)
 
 class AIPlayerInput(PlayerInput):
     def __init__(self):
@@ -1108,7 +1120,7 @@ class GamePlayerStatus:
         if isinstance(player_game_job, StartDrawCardFromDeckJob):
             print(
                 f"start: {self._start_draw_from_deck}, other: {self._start_draw_from_other_player}")
-            return (not self._start_draw_from_deck) and (not self._start_draw_from_other_player)
+            return not self._start_draw_from_deck
         if isinstance(player_game_job, DrawCardFromDeckJob):
             if self._start_draw_from_deck and not self._end_draw_from_deck:
                 if self._num_card_drawn_from_deck < 3:
@@ -1119,7 +1131,7 @@ class GamePlayerStatus:
                 return True
             return False
         if isinstance(player_game_job, StartDrawCardFromOtherPlayerJob):
-            return (not self._start_draw_from_deck) and (not self._start_draw_from_other_player)
+            return not self._start_draw_from_other_player
         if isinstance(player_game_job, SelectFromOtherPlayerJob):
             return self._start_draw_from_other_player and (not self._draw_from_other_player) and self._other_player.card_count() > 0
         if isinstance(player_game_job, DrawFromOtherPlayerJob):
@@ -1214,7 +1226,6 @@ class GameManager(GameLogicActor):
             for game_result_listener in self._game_result_listeners:
                 game_result_listener(player)
             self._job_manager.paused = True
-
 
 class Game:
     def __init__(self, num_of_players=2):
