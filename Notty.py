@@ -22,8 +22,8 @@ WINDOW_HEIGHT = 600
 # Card spacing constants
 CARD_WIDTH = 80
 CARD_HEIGHT = 120
-HORIZONTAL_SPACING = 30  # Space between cards horizontally
-VERTICAL_SPACING = 20  # Space between cards vertically
+HORIZONTAL_SPACING = 5  # Space between cards horizontally
+VERTICAL_SPACING = 5  # Space between cards vertically
 STACK_OFFSET = 15  # Offset for stacked cards
 
 game_over = False
@@ -507,7 +507,7 @@ class Player(core.IPlayerAgentListener):
         if not stacked:
             total_width += HORIZONTAL_SPACING * (len(self.cards) - 1)
 
-        start_x = (WINDOW_WIDTH - total_width) / 2
+        start_x = (WINDOW_WIDTH - total_width) / 3.5
         base_y = WINDOW_HEIGHT - (CARD_HEIGHT * 1.05) if self.position == 'bottom' else CARD_HEIGHT / 1.35
 
         # First pass: identify stacked cards
@@ -526,10 +526,10 @@ class Player(core.IPlayerAgentListener):
             if card in self.stacked_cards:
                 # Position for stacked cards
                 stack_index = self.stacked_cards.index(card)
-                base_x = start_x + 4 * (total_width / 4)  # Base position for stack
+                base_x = start_x + 3 * (total_width / 4)  # Base position for stack
 
                 # Calculate stack offset with slightly more space
-                stack_offset = stack_index * (HORIZONTAL_SPACING / 1.5)  # Increased spacing
+                stack_offset = stack_index * (HORIZONTAL_SPACING / 0.25)  # Increased spacing
 
                 # Apply raised offset if card is raised
                 raised_offset = card.RAISED_HORIZONTAL_OFFSET if card.is_raised else 0
@@ -1374,19 +1374,19 @@ class TwoPlayerScreen(ScreenBase):
             'deck': ClickableLabel(
                 "resources/images/ui/labels/deck_label.png",
                 "resources/images/ui/labels/clickable_deck_label.png",
-                (WINDOW_WIDTH / 2.25, WINDOW_HEIGHT / 2.18),
+                (WINDOW_WIDTH / 2.10, WINDOW_HEIGHT / 2.18),
                 0.16
             ),
             'pass': ClickableLabel(
                 "resources/images/ui/labels/game_pass_label.png",
                 "resources/images/ui/labels/clickable_game_pass_label.png",
-                (WINDOW_WIDTH / 1.7, WINDOW_HEIGHT / 1.075),
+                (WINDOW_WIDTH / 1.5, WINDOW_HEIGHT / 1.075),
                 0.065
             ),
             'drawfromdeck': ClickableLabel(
                 "resources/images/ui/labels/draw_from_deck_label.png",
                 "resources/images/ui/labels/clickable_draw_from_deck_label.png",
-                (WINDOW_WIDTH / 3.6, WINDOW_HEIGHT / 1.6),
+                (WINDOW_WIDTH / 3.4, WINDOW_HEIGHT / 1.6),
                 0.15
             ),
             'drawfromplayer': ClickableLabel(
@@ -1398,20 +1398,20 @@ class TwoPlayerScreen(ScreenBase):
             'discard': ClickableLabel(
                 "resources/images/ui/labels/discard_label.png",
                 "resources/images/ui/labels/clickable_discard_label.png",
-                (WINDOW_WIDTH / 2.2, WINDOW_HEIGHT / 1.075),
+                (WINDOW_WIDTH / 2.05, WINDOW_HEIGHT / 1.075),
                 0.065
             ),
             'playforme': ClickableLabel(
                 "resources/images/ui/labels/play_for_me_label.png",
                 "resources/images/ui/labels/clickable_play_for_me_label.png",
-                (WINDOW_WIDTH / 4, WINDOW_HEIGHT / 1.075),
+                (WINDOW_WIDTH / 3.85, WINDOW_HEIGHT / 1.075),
                 0.065
             ),
             'quitgame': QuitGameLabel(
                 "resources/images/ui/labels/quit_game_label.png",
                 "resources/images/ui/labels/clickable_quit_game_label.png",
-                (WINDOW_WIDTH / 1.1, WINDOW_HEIGHT / 1.1),
-                0.09),
+                (WINDOW_WIDTH / 1.07, WINDOW_HEIGHT / 1.075),
+                0.08),
             'end_draw': EndDrawLabel(self.game_state)
         }
 
