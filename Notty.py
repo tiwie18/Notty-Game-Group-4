@@ -457,15 +457,21 @@ class Card(RenderableImage):
         self.is_raised = not self.is_raised
         self.update()
 
-    def update_position(self, new_pos):
+    def update_position(self, new_pos, new_rot=(1,0)):
         """Update both the display position and collision rect"""
         old_pos = self.position2d
+        old_rot = self.rotation2d
         self.position2d = new_pos
+        self.rotation2d = new_rot
         hover_adjusted_pos = (new_pos[0], new_pos[1] + self.hover_offset)
         self.rect.x = hover_adjusted_pos[0] - CARD_WIDTH / 2
         self.rect.y = hover_adjusted_pos[1] - CARD_HEIGHT / 2
         # Animation Magic Touch Here
         animation.play_animation(self,move_to("position2d",old_pos, new_pos, 0.2))
+
+    def update_rotation(self, new_rot):
+        """Update both the display rotation and collision rect"""
+        self.rotation2d = new_rot
 
     def contains_point(self, pos):
         """Check if a point is within the card's clickable area"""
@@ -1775,11 +1781,23 @@ class TwoPlayerScreen(ScreenBase):
         text = font.render(f"Player {self.game_state.current_player + 1}'s Turn", True, (255, 255, 255))
         screen.blit(text, (10, 10))
 
+        # Draw instruction for taking card from opponent
+        if self.game_state.selected_opponent_card:
+            instruction_text = font.render("Press SPACEBAR to take selected card", True, (255, 255, 255))
+            # Center the text above the deck
+            text_width = instruction_text.get_width()
+            text_x = (WINDOW_WIDTH - text_width) // 2
+            screen.blit(instruction_text, (text_x, WINDOW_HEIGHT // 2 - 130))
+
         # Draw cards remaining indicator if in draw mode
         if self.game_state.draw_mode_active:
             remaining = 3 - self.game_state.cards_drawn_this_turn
             draw_text = font.render(f"Cards remaining: {remaining}", True, (255, 255, 255))
             screen.blit(draw_text, (WINDOW_WIDTH - 200, 10))
+
+        # For three player mode only - draw player labels
+        if hasattr(self, 'draw_player_labels'):
+            self.draw_player_labels(screen)
 
     def update(self):
         """Update game state"""
@@ -1892,10 +1910,10 @@ class ThreePlayerScreen(ScreenBase):
         if clicked_card:
             if clicked_card.selected:
                 print(f"Card clicked and selected: {clicked_card.color}_{clicked_card.number}")
-                self.game_state.human_input.select_card(clicked_card.logic_card)
+                self.game_state.human_input.deselect_card(clicked_card.logic_card)
             else:
                 print(f"Card clicked and deselected: {clicked_card.color}_{clicked_card.number}")
-                self.game_state.human_input.deselect_card(clicked_card.logic_card)
+                self.game_state.human_input.select_card(clicked_card.logic_card)
             return True
 
         # Then check opponent's cards
@@ -1971,11 +1989,23 @@ class ThreePlayerScreen(ScreenBase):
         text = font.render(f"Player {self.game_state.current_player + 1}'s Turn", True, (255, 255, 255))
         screen.blit(text, (10, 10))
 
+        # Draw instruction for taking card from opponent
+        if self.game_state.selected_opponent_card:
+            instruction_text = font.render("Press SPACEBAR to take selected card", True, (255, 255, 255))
+            # Center the text above the deck
+            text_width = instruction_text.get_width()
+            text_x = (WINDOW_WIDTH - text_width) // 2
+            screen.blit(instruction_text, (text_x, WINDOW_HEIGHT // 2 - 130))
+
         # Draw cards remaining indicator if in draw mode
         if self.game_state.draw_mode_active:
             remaining = 3 - self.game_state.cards_drawn_this_turn
             draw_text = font.render(f"Cards remaining: {remaining}", True, (255, 255, 255))
             screen.blit(draw_text, (WINDOW_WIDTH - 200, 10))
+
+        # For three player mode only - draw player labels
+        if hasattr(self, 'draw_player_labels'):
+            self.draw_player_labels(screen)
 
         # Draw player labels for 3-player mode
         self.draw_player_labels(screen)
