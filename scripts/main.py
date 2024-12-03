@@ -464,7 +464,7 @@ class AIPlayerInput(PlayerInput):
             else:
                 self.player.pass_turn()
         elif player_status.start_draw_from_deck and not player_status.end_draw_from_deck:
-            if player_status.num_card_drawn_from_deck < 3 and self.player.card_count() < 20:
+            if player_status.num_card_drawn_from_deck < 3 and self.player.card_count() + player_status.num_card_drawn_from_deck < 20:
                 self.player.draw_card_from_deck()
             else:
                 self.player.end_draw_card_from_deck()
@@ -599,8 +599,8 @@ class PlayerAgent(GameLogicActor):
         return self._other_selected_card
 
     def pop_other_selected(self):
-        self._collection.remove_card(self._other_selected_card)
         temp = self._other_selected_card
+        self.remove_card(temp)
         self._other_selected_card = None
         return temp
 
@@ -739,8 +739,10 @@ class Deck:
         for color in ['red', 'blue', 'green', 'yellow']:
             for number in range(1, 11):
                 self._collection.push_card(Card(color, number))
+        for color in ['red', 'blue', 'green', 'yellow']:
+            for number in range(1, 11):
                 self._collection.push_card(Card(color, number))
-        self._collection.shuffle()
+        # self._collection.shuffle()
 
 
     def print_deck(self):
@@ -862,6 +864,7 @@ def draw_card_from_other_player_wrapper(player, other_player):
     def draw_card():
         card = other_player.pop_other_selected()
         player.push_card(card)
+        print(f"other player card count{other_player.card_count()}")
         print (f"player draw card from other player: {card}")
 
     return draw_card
@@ -1122,8 +1125,9 @@ class GamePlayerStatus:
                 f"start: {self._start_draw_from_deck}, other: {self._start_draw_from_other_player}")
             return not self._start_draw_from_deck
         if isinstance(player_game_job, DrawCardFromDeckJob):
+            player = player_game_job.player
             if self._start_draw_from_deck and not self._end_draw_from_deck:
-                if self._num_card_drawn_from_deck < 3:
+                if self._num_card_drawn_from_deck < 3 and self._num_card_drawn_from_deck + player.card_count() < 20:
                     return True
             return False
         if isinstance(player_game_job, EndDrawCardFromDeckJob):

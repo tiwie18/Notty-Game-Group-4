@@ -17,11 +17,10 @@ if not os.path.exists(init_file):
 
 print(f"Created {init_file}")
 
-# WINDOW_WIDTH = 800
-# WINDOW_HEIGHT = 600
 #Shanti change the screen size to make it easier for arranging cards in three player screen
 WINDOW_WIDTH = 900
 WINDOW_HEIGHT = 675
+UNI_SCALE = WINDOW_HEIGHT/3546
 
 # Card spacing constants
 CARD_WIDTH = 80
@@ -271,6 +270,7 @@ class ClickableLabel(Label):
     def add_on_cursor_exit_listener(self, function):
         self.cursor_exit_listener_list.append(function)
 
+
 def set_label_cursor_anim_effect(label:ClickableLabel):
     start_angle = label.euler_angle
     start_scale2d = label.scale2d
@@ -279,6 +279,7 @@ def set_label_cursor_anim_effect(label:ClickableLabel):
     label.add_on_cursor_enter_listener(lambda : animation.play_animation(label, vibrate_once_1d("euler_angle",start_angle,amplitude,0.2)))
     label.add_on_cursor_enter_listener(lambda : animation.play_animation(label, overshoot_2d("scale2d",start_scale2d, end_scale2d,0.2), layer=1))
     label.add_on_cursor_exit_listener(lambda: animation.play_animation(label, overshoot_2d("scale2d",  end_scale2d, start_scale2d,0.2), layer=1))
+
 
 class PlayGameLabel(ClickableLabel):
     def click(self):
@@ -385,16 +386,13 @@ class NewGameLabel(ClickableLabel):
         global current_screen
         current_screen = HomeScreen()
 
-
 class ExitGameLabel(ClickableLabel):
     def click(self):
         pygame.quit()
 
-
 class DeckLabel(ClickableLabel):
     def click(self):
         global current_screen
-
 
 class Card(RenderableImage):
     def __init__(self, color, number, position2d=(0, 0), scale2d=(0.15, 0.15), rotation2d=(1, 0)):
@@ -460,21 +458,35 @@ class Card(RenderableImage):
         self.is_raised = not self.is_raised
         self.update()
 
-    def update_position(self, new_pos, new_rot=(1,0)):
+    def update_position(self, new_pos, animation_layer=0):
         """Update both the display position and collision rect"""
         old_pos = self.position2d
-        old_rot = self.rotation2d
         self.position2d = new_pos
-        self.rotation2d = new_rot
         hover_adjusted_pos = (new_pos[0], new_pos[1] + self.hover_offset)
         self.rect.x = hover_adjusted_pos[0] - CARD_WIDTH / 2
         self.rect.y = hover_adjusted_pos[1] - CARD_HEIGHT / 2
         # Animation Magic Touch Here
-        animation.play_animation(self,move_to("position2d",old_pos, new_pos, 0.2))
+        if animation_layer in (0,1,2):
+            animation.play_animation(self,move_to("position2d",old_pos, new_pos, 0.2),animation_layer)
 
-    def update_rotation(self, new_rot):
-        """Update both the display rotation and collision rect"""
+    def update_rotation(self, new_rot, animation_layer=1):
+        old_rot = self.rotation2d
         self.rotation2d = new_rot
+        if animation_layer in [0, 1, 2]:
+            if abs( math_util.vec_2d_dot(math_util.vec_2d_plus(old_rot,new_rot),(1,1)) ) > 0.001:
+                animation.play_animation(self, ease_in_out_2d("rotation2d", old_rot, new_rot, 0.2),layer=animation_layer)
+            else:
+                middle_rot = (old_rot[1] , -old_rot[0])
+
+                scale_animation_sequence = AnimationSequenceTask(loop=False)
+
+                animation_task_1 = move_to("rotation2d", old_rot,middle_rot,0.1)
+                animation_task_2 = move_to("rotation2d", middle_rot,new_rot,0.1)
+
+                scale_animation_sequence.add_sub_task(animation_task_1)
+                scale_animation_sequence.add_sub_task(animation_task_2)
+
+                animation.play_animation(self, scale_animation_sequence, layer=1)
 
     def contains_point(self, pos):
         """Check if a point is within the card's clickable area"""
@@ -508,7 +520,6 @@ class Card(RenderableImage):
         super().draw(screen)
         self.position2d = original_pos
 
-
 class Player(core.IPlayerAgentListener):
     def __init__(self, position, cards=None):
         self.position = position  # 'bottom', 'top', 'left', or 'right'
@@ -535,7 +546,7 @@ class Player(core.IPlayerAgentListener):
         if not card.is_face_up:
             card.is_face_up = True
             card.flip()
-        self.update_card_positions()
+        # self.update_card_positions()
 
     def remove_card(self, card):
         """Remove a card from player's hand"""
@@ -547,7 +558,7 @@ class Player(core.IPlayerAgentListener):
                 self.stacked_cards.remove(card)
             if self.hovered_card == card:
                 self.hovered_card = None
-            self.update_card_positions()
+            # self.update_card_positions()
 
     def update_card_positions(self):
         """Update positions of all cards in hand"""
@@ -611,9 +622,9 @@ class Player(core.IPlayerAgentListener):
             card.update_position((x, base_y))
 
             if self.position == 'top':
-                card.rotation2d = math_util.euler_angle_to_rotation(180)
+                card.update_rotation(math_util.euler_angle_to_rotation(180))
             else:
-                card.rotation2d = math_util.euler_angle_to_rotation(0)
+                card.update_rotation(math_util.euler_angle_to_rotation(0))
 
     def _arrange_vertical(self, stacked):
         """Arrange cards vertically (for left and right players)"""
@@ -654,12 +665,15 @@ class Player(core.IPlayerAgentListener):
                 # tiwie edit the position
                 final_x = x
                 card.update_position((final_x, base_y + stack_y_offset))
+                # card.update_rotation((1,0))
             else:
                 non_stacked_index = non_stacked.index(card)
-                card.update_position((x, 50+ start_y + non_stacked_index * (CARD_WIDTH + VERTICAL_SPACING-10))) #STACKING NON_STACKED CARDS
+                card.update_position((x, 50+ start_y + non_stacked_index * (CARD_WIDTH + VERTICAL_SPACING-10)))
+                # card.update_rotation((1,0))
+                #STACKING NON_STACKED CARDS
 
             angle = -90 if self.position == 'left' else 90
-            card.rotation2d = math_util.euler_angle_to_rotation(angle)
+            card.update_rotation(math_util.euler_angle_to_rotation(angle))
 
     def flip_all_cards(self, face_up:bool=False):
         if not face_up:
@@ -806,7 +820,6 @@ class Player(core.IPlayerAgentListener):
         job.add_start_evoke_listener(self.game_state.take_opponent_card)
         job.add_start_evoke_listener(flip_up_all_card)
 
-
 class HumanPlayerInput(core.PlayerInput):
     def __init__(self):
         super().__init__()
@@ -877,8 +890,10 @@ class HumanPlayerInput(core.PlayerInput):
         if self.player.selected_valid_group():
             self.player.dispose_selected()
         else:
-            print(f"{self.player.selected_as_list()} is not a valid group")
-
+            debug_string = ""
+            for card in self.player.selected_as_list():
+                debug_string += str(card) + " "
+            print(f"{debug_string} is not a valid group")
 
 def list_diff(old_list, new_list):
     diff_in = [card for card in new_list if not card in old_list]
@@ -944,6 +959,7 @@ class GameState:
         def on_draw_initial_5_card_to_player():
             self._sync_player_card(player)
             self._sync_deck_card()
+            player.update_card_positions()
 
         return on_draw_initial_5_card_to_player
 
@@ -1180,6 +1196,8 @@ class GameState:
                 if self.selected_opponent_card in player.cards:
                     print("TAKE OPPONENT CARD")
                     diff_in, diff_out = self._sync_player_card(player)
+                    print(f"diff in:{len(diff_in)}, diff out:{len(diff_out)}")
+                    print(f'len old:{len(player.cards)}, len new:{player.logic_player.card_count()}')
                     assert len(diff_out) == 1
                     self.selected_opponent_card.is_face_up = True
                     current_player = self.players[self.current_player]
@@ -1187,6 +1205,8 @@ class GameState:
                     assert len(diff_in) == 1
                     self.selected_opponent_card.highlighted = False
                     self.selected_opponent_card = None
+                    player.update_card_positions()
+                    current_player.update_card_positions()
                     return True
         return False
 
@@ -1213,9 +1233,10 @@ class GameState:
             card.is_raised = False
             card.highlighted = False
             card.update_position((WINDOW_WIDTH * 0.5, WINDOW_HEIGHT * 0.5))
+            card.update_rotation((1,0))
         self._sync_deck_card()
         random.shuffle(self.deck)
-        current_player.update_card_positions()
+        # current_player.update_card_positions()
         print(f"{cards} discarded")
         return True
 
@@ -1262,9 +1283,9 @@ class GameState:
     def check_winner(self, player):
         """Check if there's a winner (player with no cards)"""
         visual_player = self.logic_player_to_visual_player(player)
-        current_player = self.players[self.current_player]
+        human_player = self.players[0]
         global current_screen
-        if visual_player == current_player:
+        if visual_player == human_player:
             current_screen = CongratsScreen()
         else:
             current_screen = LoseScreen()
@@ -1314,49 +1335,47 @@ class StartScreen(ScreenBase):
 
         # Animation Time!
         rotation_identity = math_util.euler_angle_to_rotation(0)
-        bg_ratio = WINDOW_HEIGHT / WINDOW_WIDTH # Shanti change to WINDOW_HEIGHT and WINDOW_WIDTH
-        pos_0 = (3670 * bg_ratio,809 * bg_ratio)
+        bg_ratio = bg_ratio = WINDOW_HEIGHT / 3546 # Shanti change to WINDOW_HEIGHT and WINDOW_WIDTH
+        pos_1 = (499 * bg_ratio, 1049 * bg_ratio)
+        pos_2 = (668 * bg_ratio, 777 * bg_ratio)
+        pos_3 = (971 * bg_ratio, 849 * bg_ratio)
+        pos_4 = (1156 * bg_ratio, 545 * bg_ratio)
+        pos_5 = (1560 * bg_ratio, 593 * bg_ratio)
+        pos_6 = (3096 * bg_ratio, 625 * bg_ratio)
+        pos_7 = (3462 * bg_ratio, 689 * bg_ratio)
+        pos_8 = (3825 * bg_ratio, 750 * bg_ratio)
+        pos_9 = (4137 * bg_ratio, 945 * bg_ratio)
+        pos_10 = (1972 * bg_ratio, 2729 * bg_ratio)
+        pos_11 = (2356 * bg_ratio, 2641 * bg_ratio)
+        pos_12 = (2755 * bg_ratio, 2689 * bg_ratio)
         # Shanti change to WINDOW_HEIGHT and WINDOW_WIDTH start
-        pos_1 = (WINDOW_WIDTH/3.5 * bg_ratio, WINDOW_HEIGHT/5 * bg_ratio) # card red 9
-        pos_2 = (WINDOW_WIDTH/2.8 * bg_ratio, WINDOW_HEIGHT/4.8 * bg_ratio) # card red 10
-        pos_3 = (WINDOW_WIDTH/4.2 * bg_ratio, WINDOW_HEIGHT/3.6 * bg_ratio) # card red 8
-        pos_4 = (WINDOW_WIDTH/6.2 * bg_ratio, WINDOW_HEIGHT/4 * bg_ratio) # card red 7
-        pos_5 = (WINDOW_WIDTH/8 * bg_ratio, WINDOW_HEIGHT/3 * bg_ratio) # card red 6
-        pos_6 = (WINDOW_WIDTH/1.02 * bg_ratio, WINDOW_HEIGHT/5 * bg_ratio) #card blue 4
-        pos_7 = (WINDOW_WIDTH/0.96 * bg_ratio, WINDOW_HEIGHT/4.7 * bg_ratio) #card red 4
-        pos_8 = (WINDOW_WIDTH/0.90 * bg_ratio, WINDOW_HEIGHT/4.1 * bg_ratio) #card yellow 4
-        pos_9 = (WINDOW_WIDTH/0.85 * bg_ratio, WINDOW_HEIGHT/3.6 * bg_ratio) #card green 4
-        pos_10 = (WINDOW_WIDTH/1.7 * bg_ratio, WINDOW_HEIGHT/0.9 * bg_ratio) #card yellow 1
-        pos_11 = (WINDOW_WIDTH/1.49 * bg_ratio, WINDOW_HEIGHT/0.92 * bg_ratio) #card yellow 2
-        pos_12 = (WINDOW_WIDTH/1.33 * bg_ratio, WINDOW_HEIGHT/0.9 * bg_ratio) #card yellow 2
-        # Shanti change to WINDOW_HEIGHT and WINDOW_WIDTH start
-        card_red_1 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1.png", position2d=pos_1, scale2d=(0.16, 0.16),
+        card_red_1 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1.png", position2d=pos_1, scale2d=(bg_ratio, bg_ratio),
                                      rotation2d=rotation_identity)
-        card_red_2 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (1).png", position2d=pos_2, scale2d=(0.16, 0.16),
+        card_red_2 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (1).png", position2d=pos_2, scale2d=(bg_ratio, bg_ratio),
                                      rotation2d=rotation_identity)
-        card_red_3 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (2).png", position2d=pos_3, scale2d=(0.16, 0.16),
+        card_red_3 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (2).png", position2d=pos_3, scale2d=(bg_ratio, bg_ratio),
                                      rotation2d=rotation_identity)
-        card_red_4 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (3).png", position2d=pos_4, scale2d=(0.16, 0.16),
+        card_red_4 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (3).png", position2d=pos_4, scale2d=(bg_ratio, bg_ratio),
                                      rotation2d=rotation_identity)
-        card_red_5 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (4).png", position2d=pos_5, scale2d=(0.16, 0.16),
+        card_red_5 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (4).png", position2d=pos_5, scale2d=(bg_ratio, bg_ratio),
                                      rotation2d=rotation_identity)
-        card_red_6 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (8).png", position2d=pos_6, scale2d=(0.16, 0.16),
+        card_red_6 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (8).png", position2d=pos_6, scale2d=(bg_ratio, bg_ratio),
                                      rotation2d=rotation_identity)
-        card_red_7 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (7).png", position2d=pos_7, scale2d=(0.16, 0.16),
+        card_red_7 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (7).png", position2d=pos_7, scale2d=(bg_ratio, bg_ratio),
                                      rotation2d=rotation_identity)
-        card_red_8 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (6).png", position2d=pos_8, scale2d=(0.16, 0.16),
+        card_red_8 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (6).png", position2d=pos_8, scale2d=(bg_ratio, bg_ratio),
                                      rotation2d=rotation_identity)
-        card_red_9 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (5).png", position2d=pos_9, scale2d=(0.16, 0.16),
+        card_red_9 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (5).png", position2d=pos_9, scale2d=(bg_ratio, bg_ratio),
                                      rotation2d=rotation_identity)
 
-        title_image = RenderableImage("resources/images/ui/screen/StartScreenObject/NottyGame.png", position2d=(WINDOW_WIDTH * 0.5, WINDOW_HEIGHT * 0.5), scale2d=(0.16, 0.16),
+        title_image = RenderableImage("resources/images/ui/screen/StartScreenObject/NottyGame.png", position2d=(WINDOW_WIDTH * 0.5, WINDOW_HEIGHT * 0.5), scale2d=(bg_ratio, bg_ratio),
                                      rotation2d=rotation_identity)
 
-        card_yellow_1 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (10).png", position2d=pos_10, scale2d=(0.16, 0.16),
+        card_yellow_1 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (10).png", position2d=pos_10, scale2d=(bg_ratio, bg_ratio),
                                      rotation2d=rotation_identity)
-        card_yellow_2 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (11).png", position2d=pos_11, scale2d=(0.16, 0.16),
+        card_yellow_2 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (11).png", position2d=pos_11, scale2d=(bg_ratio, bg_ratio),
                                      rotation2d=rotation_identity)
-        card_yellow_3 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (12).png", position2d=pos_12, scale2d=(0.16, 0.16),
+        card_yellow_3 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (12).png", position2d=pos_12, scale2d=(bg_ratio, bg_ratio),
                                      rotation2d=rotation_identity)
 
         self.objects.append(card_red_1)
@@ -1393,8 +1412,8 @@ class StartScreen(ScreenBase):
             scale_animation_sequence = AnimationSequenceTask(loop=False)
 
             animation_task_1 = constant_2d("scale2d", (0, 0), pretime + 1)
-            animation_task_2 = overshoot_2d("scale2d", (0, 0), (0.15, 0.15), 0.5, overshoot=0.6)
-            animation_task_3 = constant_2d("scale2d", (0.15, 0.15), posttime)
+            animation_task_2 = overshoot_2d("scale2d", (0, 0), (bg_ratio, bg_ratio), 0.5, overshoot=0.6)
+            animation_task_3 = constant_2d("scale2d", (bg_ratio, bg_ratio), posttime)
 
             scale_animation_sequence.add_sub_task(animation_task_1)
             scale_animation_sequence.add_sub_task(animation_task_2)
@@ -1402,7 +1421,7 @@ class StartScreen(ScreenBase):
 
             animation.play_animation(card, scale_animation_sequence, layer=1)
 
-        animation.play_animation(title_image, ping_pong("scale2d", (0.15,0.15),(0.16,0.16), 2))
+        animation.play_animation(title_image, ping_pong("scale2d", (0.17,0.17),(bg_ratio,bg_ratio), 2))
         title_image.alpha = 0
 
         alpha_animation_sequence = AnimationSequenceTask(loop=False)
@@ -1569,7 +1588,6 @@ class EndDrawLabel(ClickableLabel):
             # self.game_state.confirm_drawn_cards()
             self.game_state.human_input.end_draw_card_from_deck()
 
-
 class EndTurnLabel(ClickableLabel):
     def __init__(self, game_state):
         super().__init__(
@@ -1580,7 +1598,6 @@ class EndTurnLabel(ClickableLabel):
         )
     def click(self):
         pass
-
 
 class TwoPlayerScreen(ScreenBase):
     def __init__(self):
@@ -1829,7 +1846,6 @@ class TwoPlayerScreen(ScreenBase):
             button.visible = False
             button.enabled = False
 
-
 class ThreePlayerScreen(ScreenBase):
     def __init__(self):
         super().__init__(background_filename='resources/images/ui/screens/PlayScreen.png')
@@ -1901,9 +1917,15 @@ class ThreePlayerScreen(ScreenBase):
         self.buttons['deck'].add_click_listener(self.game_state.human_input.draw_card_from_deck)
         self.buttons['playforme'].add_click_listener(self.handle_play_for_me)
         self.buttons['quitgame'].add_click_listener(self.handle_quitgame)
+        self.buttons['end_turn'].add_click_listener(self.game_state.human_input.pass_turn)
 
         # Add buttons to objects list
         self.objects.extend(self.buttons.values())
+
+        button_list = list(self.buttons.values())
+        for button in button_list:
+            set_label_cursor_anim_effect(button)
+        pop_up_buttons(button_list)
 
     def handle_drawfromplayer(self):
         """Enable selection from either opponent"""
@@ -2088,7 +2110,7 @@ class ThreePlayerScreen(ScreenBase):
 
 class CongratsScreen(ScreenBase):
     def __init__(self):
-        super().__init__(background_filename='resources/images/ui/screen/CongratsScreen.png')
+        super().__init__(background_filename='resources/images/ui/screens/CongratulationsScreen.png')
 
         self.newgame_label = NewGameLabel("resources/images/ui/labels/new_game_label.png",
                                           "resources/images/ui/labels/clickable_new_game_label.png",
@@ -2107,7 +2129,7 @@ class CongratsScreen(ScreenBase):
 
 class LoseScreen(ScreenBase):
     def __init__(self):
-        super().__init__(background_filename='resources/images/ui/screens/LoseScreen.png')
+        super().__init__(background_filename='resources/images/ui/screens/SorryScreen.png')
 
         self.newgame_label = NewGameLabel("resources/images/ui/labels/new_game_label.png",
                                           "resources/images/ui/labels/clickable_new_game_label.png",
