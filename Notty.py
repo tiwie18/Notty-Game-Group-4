@@ -1834,6 +1834,9 @@ class ThreePlayerScreen(ScreenBase):
     def __init__(self):
         super().__init__(background_filename='resources/images/ui/screens/PlayScreen.png')
         self.game_state = GameState(num_players=3)
+        self.active_opponent = None  # Track which opponent we're currently drawing from
+        self.available_opponents = []  # Store opponents with cards
+        self.opponent_indices = []  # Store opponent indices
 
         # Initialize buttons
         button_scale = 0.1
@@ -1893,13 +1896,7 @@ class ThreePlayerScreen(ScreenBase):
         self.buttons['pass'].add_click_listener(self.game_state.human_input.pass_turn)
         self.buttons['drawfromdeck'].add_click_listener(self.game_state.human_input.start_draw_from_deck)
 
-        def handle_drawfromplayer():
-            current_idx = self.game_state.current_player
-            other_idx = (current_idx + 1) % 3  # For now just use next player
-            other_player = self.game_state.players[other_idx].logic_player
-            self.game_state.human_input.start_draw_from_other_player(other_player)
-
-        self.buttons['drawfromplayer'].add_click_listener(handle_drawfromplayer)
+        self.buttons['drawfromplayer'].add_click_listener(self.handle_drawfromplayer)
         self.buttons['discard'].add_click_listener(self.game_state.human_input.dispose_selected)
         self.buttons['deck'].add_click_listener(self.game_state.human_input.draw_card_from_deck)
         self.buttons['playforme'].add_click_listener(self.handle_play_for_me)
@@ -1907,6 +1904,35 @@ class ThreePlayerScreen(ScreenBase):
 
         # Add buttons to objects list
         self.objects.extend(self.buttons.values())
+
+    def handle_drawfromplayer(self):
+        """Enable selection from either opponent"""
+        current_idx = self.game_state.current_player
+
+        # Reset any previous selections
+        if self.game_state.selected_opponent_card:
+            self.game_state.selected_opponent_card.highlighted = False
+            self.game_state.selected_opponent_card = None
+
+        # Get both opponent indices
+        self.opponent_indices = [(current_idx + i) % 3 for i in range(1, 3)]
+
+        # Reset and store both opponents
+        self.available_opponents = []
+        for idx in self.opponent_indices:
+            opponent = self.game_state.players[idx]
+            if opponent.cards:  # Only add opponents who have cards
+                self.available_opponents.append(opponent)
+            # Set all opponent cards face down
+            for card in opponent.cards:
+                card.set_face_down()
+            opponent.update_card_positions()
+
+        # Enable selection from any opponent with cards
+        if self.available_opponents:
+            # Initialize with first opponent but allow switching
+            self.active_opponent = self.available_opponents[0]
+            self.game_state.human_input.start_draw_from_other_player(self.active_opponent.logic_player)
 
     def handle_card_click(self, pos):
         """Handle clicking on cards"""
@@ -1918,19 +1944,29 @@ class ThreePlayerScreen(ScreenBase):
         clicked_card = current_player.handle_click(pos)
         if clicked_card:
             if clicked_card.selected:
-                print(f"Card clicked and selected: {clicked_card.color}_{clicked_card.number}")
                 self.game_state.human_input.deselect_card(clicked_card.logic_card)
+                print(f"Card deselected: {clicked_card.color}_{clicked_card.number}")
             else:
-                print(f"Card clicked and deselected: {clicked_card.color}_{clicked_card.number}")
                 self.game_state.human_input.select_card(clicked_card.logic_card)
+                print(f"Card selected: {clicked_card.color}_{clicked_card.number}")
             return True
 
-        # Then check opponent's cards
-        for i, player in enumerate(self.game_state.players):
-            if i != self.game_state.current_player:
-                clicked_card = player.handle_click(pos)
+        # Then check both opponents' cards
+        for opponent in self.game_state.players:
+            if opponent != current_player:
+                clicked_card = opponent.handle_click(pos)
                 if clicked_card:
+                    # Clear previous selection if exists
+                    if self.game_state.selected_opponent_card:
+                        self.game_state.selected_opponent_card.highlighted = False
+
+                    # Update active opponent and selected card
+                    self.active_opponent = opponent
+                    self.game_state.human_input.start_draw_from_other_player(opponent.logic_player)
                     self.game_state.human_input.select_from_other_player(clicked_card.logic_card)
+                    clicked_card.highlighted = True
+                    self.game_state.selected_opponent_card = clicked_card
+                    print(f"Opponent card selected: {clicked_card.color}_{clicked_card.number}")
                     return True
 
         return False
