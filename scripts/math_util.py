@@ -41,4 +41,4 @@ def vec_2d_mul(vec, num):
     return vec[0] * num, vec[1] * num
 
 def rotate_vec2d(vec, rot):
-    return vec[0] * rot[0] - vec[1] * rot[1], vec[1] * rot[0] + vec[0] * rot[1]
+    return - vec[0] * rot[0] + vec[1] * rot[1], vec[1] * rot[0] + vec[0] * rot[1]

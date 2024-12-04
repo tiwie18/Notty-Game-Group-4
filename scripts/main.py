@@ -742,7 +742,7 @@ class Deck:
         for color in ['red', 'blue', 'green', 'yellow']:
             for number in range(1, 11):
                 self._collection.push_card(Card(color, number))
-        # self._collection.shuffle()
+        self._collection.shuffle()
 
 
     def print_deck(self):

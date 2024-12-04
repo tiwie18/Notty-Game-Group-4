@@ -64,6 +64,7 @@ def pop_up_buttons(button_list, pretime = 0, posttime = 1):
         pretime += 0.1
         posttime -= 0.1
 
+
 class VisualObject:
     def __init__(self, position2d=(0, 0), scale2d=(1, 1), rotation2d=(1, 0), alpha=255):
         self.position2d = position2d
@@ -461,7 +462,7 @@ class Card(RenderableImage):
     def update_position(self, new_pos, animation_layer=0):
         """Update both the display position and collision rect"""
         old_pos = self.position2d
-        self.position2d = new_pos
+        # self.position2d = new_pos
         hover_adjusted_pos = (new_pos[0], new_pos[1] + self.hover_offset)
         self.rect.x = hover_adjusted_pos[0] - CARD_WIDTH / 2
         self.rect.y = hover_adjusted_pos[1] - CARD_HEIGHT / 2
@@ -471,7 +472,7 @@ class Card(RenderableImage):
 
     def update_rotation(self, new_rot, animation_layer=1):
         old_rot = self.rotation2d
-        self.rotation2d = new_rot
+        # self.rotation2d = new_rot
         if animation_layer in [0, 1, 2]:
             if abs( math_util.vec_2d_dot(math_util.vec_2d_plus(old_rot,new_rot),(1,1)) ) > 0.001:
                 animation.play_animation(self, ease_in_out_2d("rotation2d", old_rot, new_rot, 0.2),layer=animation_layer)
@@ -778,6 +779,16 @@ class Player(core.IPlayerAgentListener):
 
     def pass_turn(self, job):
         job.add_start_evoke_listener(self.game_state.end_turn)
+
+        def flip_up_all_card(): # todo: move the function to GameState and directly call from there
+            for player in self.game_state.players:
+                for card in player.cards:
+                    card.is_raised = False
+                    card.hover_offset = 0
+                    card.selected = False
+                    card.set_face_up()
+        job.add_start_evoke_listener(flip_up_all_card)
+
 
     def start_draw_from_other_player(self, other_player, job):
         job.add_start_evoke_listener(self.game_state.toggle_take_opponent_mode)
@@ -1946,15 +1957,16 @@ class ThreePlayerScreen(ScreenBase):
             if opponent.cards:  # Only add opponents who have cards
                 self.available_opponents.append(opponent)
             # Set all opponent cards face down
-            for card in opponent.cards:
-                card.set_face_down()
-            opponent.update_card_positions()
+            # for card in opponent.cards:
+            #     card.set_face_down()
+            # opponent.update_card_positions()
 
         # Enable selection from any opponent with cards
         if self.available_opponents:
             # Initialize with first opponent but allow switching
             self.active_opponent = self.available_opponents[0]
-            self.game_state.human_input.start_draw_from_other_player(self.active_opponent.logic_player)
+            for opponent in self.available_opponents:
+                self.game_state.human_input.start_draw_from_other_player(opponent.logic_player)
 
     def handle_card_click(self, pos):
         """Handle clicking on cards"""
