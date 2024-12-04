@@ -1695,7 +1695,7 @@ class TwoPlayerScreen(ScreenBase):
                 "resources/images/ui/labels/quit_game_label.png",
                 "resources/images/ui/labels/clickable_quit_game_label.png",
                 (WINDOW_WIDTH / 1.07, WINDOW_HEIGHT / 1.075),
-                0.08),
+                0.12), # shanti made the modification to make the label bigger
             'end_draw': EndDrawLabel(self.game_state),
             'end_turn': ClickableLabel(
                 "resources/images/ui/labels/end_turn_label.png",
@@ -1723,19 +1723,18 @@ class TwoPlayerScreen(ScreenBase):
         self.buttons['playforme'].add_click_listener(self.handle_play_for_me)
         self.buttons['quitgame'].add_click_listener(self.handle_quitgame)
 
-        self.player1_profile = RenderableImage("resources/images/ui/labels/you_icon.png",(WINDOW_WIDTH * 0.05, WINDOW_HEIGHT * 0.83),(0.04,0.04),(1,0))
-        self.player2_profile = RenderableImage("resources/images/ui/labels/computer.png",(WINDOW_WIDTH * 0.05, WINDOW_HEIGHT * 0.13),(0.04,0.04),(1,0))
+        self.player1_profile = RenderableImage("resources/images/ui/labels/you_icon.png",(WINDOW_WIDTH * 0.05, WINDOW_HEIGHT * 0.815),(0.04,0.04),(1,0)) # shanti made the modification to fix the position
+        self.player2_profile = RenderableImage("resources/images/ui/labels/computer.png",(WINDOW_WIDTH * 0.05, WINDOW_HEIGHT * 0.145),(0.04,0.04),(1,0)) # shanti made the modification to fix the position
         self.objects.append(self.player1_profile)
         self.objects.append(self.player2_profile)
 
-        self.objects.append(self.player1_profile)
-        self.objects.append(self.player2_profile)
         # Add buttons to objects list
         self.objects.extend(self.buttons.values())
 
         button_list = list(self.buttons.values())
         for button in button_list:
             set_label_cursor_anim_effect(button)
+        button_list.extend([self.player1_profile, self.player2_profile]) # shanti add the icon to be animate too
         pop_up_buttons(button_list)
 
     def set_enable_end_draw_from_other_player(self, enabled):
@@ -1863,7 +1862,7 @@ class TwoPlayerScreen(ScreenBase):
         font = pygame.font.Font(None, 36)
 
         # Define player names based on their index
-        player_names = ["YOUR", "Computer's"]
+        player_names = ["YOUR", "COMPUTER'S"] # Shanti change to capital letter so it's consistent
 
         # Get the current player's name based on the current player index
         current_player_name = player_names[self.game_state.current_player]
@@ -1967,7 +1966,7 @@ class ThreePlayerScreen(ScreenBase):
                 "resources/images/ui/labels/quit_game_label.png",
                 "resources/images/ui/labels/clickable_quit_game_label.png",
                 (WINDOW_WIDTH / 1.07, WINDOW_HEIGHT / 1.075),
-                0.08),
+                0.12), # shanti made the modification to make the label bigger
             'end_draw': EndDrawLabel(self.game_state),
             'end_turn': ClickableLabel(
                 "resources/images/ui/labels/end_turn_label.png",
@@ -1996,9 +1995,9 @@ class ThreePlayerScreen(ScreenBase):
         self.buttons['end_turn'].add_click_listener(self.game_state.human_input.pass_turn)
 
         # adding player icon
-        self.player1_profile = RenderableImage("resources/images/ui/labels/you_icon.png",(WINDOW_WIDTH * 0.05, WINDOW_HEIGHT * 0.83),(0.04,0.04),(1,0))
-        self.player2_profile = RenderableImage("resources/images/ui/labels/computer.png",(WINDOW_WIDTH * 0.95, WINDOW_HEIGHT * 0.07),(0.04,0.04),(1,0))
-        self.player3_profile = RenderableImage("resources/images/ui/labels/computer_1.png",(WINDOW_WIDTH * 0.05, WINDOW_HEIGHT * 0.07),(0.04,0.04),(1,0))
+        self.player1_profile = RenderableImage("resources/images/ui/labels/you_icon.png",(WINDOW_WIDTH * 0.06, WINDOW_HEIGHT * 0.82),(0.04,0.04),(1,0)) # shanti made the modification to fix the position
+        self.player2_profile = RenderableImage("resources/images/ui/labels/computer_1.png",(WINDOW_WIDTH * 0.11, WINDOW_HEIGHT * 0.07),(0.04,0.04),(1,0))  # shanti made the modification to fix the position
+        self.player3_profile = RenderableImage("resources/images/ui/labels/computer_2.png",(WINDOW_WIDTH * 0.89, WINDOW_HEIGHT * 0.07),(0.04,0.04),(1,0)) # shanti made the modification to fix the position
         self.objects.append(self.player1_profile)
         self.objects.append(self.player2_profile)
         self.objects.append(self.player3_profile)
@@ -2009,6 +2008,7 @@ class ThreePlayerScreen(ScreenBase):
         button_list = list(self.buttons.values())
         for button in button_list:
             set_label_cursor_anim_effect(button)
+        button_list.extend([self.player1_profile, self.player2_profile, self.player3_profile]) # shanti add the icon to be animate too
         pop_up_buttons(button_list)
 
     def set_enable_end_draw_from_other_player(self, enabled):
@@ -2150,7 +2150,7 @@ class ThreePlayerScreen(ScreenBase):
         font = pygame.font.Font(None, 36)
 
         # Define player names based on their index
-        player_names = ["YOUR", "Computer 1's", "Computer 2's"]
+        player_names = ["YOUR", "COMPUTER 1'S", "COMPUTER 2'S"] # Shanti change to capital letter so it's consistent
 
         # Get the current player's name based on the current player index
         current_player_name = player_names[self.game_state.current_player]
