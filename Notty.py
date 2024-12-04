@@ -1360,33 +1360,33 @@ class StartScreen(ScreenBase):
         pos_11 = (2356 * bg_ratio, 2641 * bg_ratio)
         pos_12 = (2755 * bg_ratio, 2689 * bg_ratio)
         # Shanti change to WINDOW_HEIGHT and WINDOW_WIDTH start
-        card_red_1 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1.png", position2d=pos_1, scale2d=(bg_ratio, bg_ratio),
+        card_red_1 = RenderableImage("resources/images/ui/screens/StartScreenObject/Object 1.png", position2d=pos_1, scale2d=(bg_ratio, bg_ratio),
                                      rotation2d=rotation_identity)
-        card_red_2 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (1).png", position2d=pos_2, scale2d=(bg_ratio, bg_ratio),
+        card_red_2 = RenderableImage("resources/images/ui/screens/StartScreenObject/Object 1 (1).png", position2d=pos_2, scale2d=(bg_ratio, bg_ratio),
                                      rotation2d=rotation_identity)
-        card_red_3 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (2).png", position2d=pos_3, scale2d=(bg_ratio, bg_ratio),
+        card_red_3 = RenderableImage("resources/images/ui/screens/StartScreenObject/Object 1 (2).png", position2d=pos_3, scale2d=(bg_ratio, bg_ratio),
                                      rotation2d=rotation_identity)
-        card_red_4 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (3).png", position2d=pos_4, scale2d=(bg_ratio, bg_ratio),
+        card_red_4 = RenderableImage("resources/images/ui/screens/StartScreenObject/Object 1 (3).png", position2d=pos_4, scale2d=(bg_ratio, bg_ratio),
                                      rotation2d=rotation_identity)
-        card_red_5 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (4).png", position2d=pos_5, scale2d=(bg_ratio, bg_ratio),
+        card_red_5 = RenderableImage("resources/images/ui/screens/StartScreenObject/Object 1 (4).png", position2d=pos_5, scale2d=(bg_ratio, bg_ratio),
                                      rotation2d=rotation_identity)
-        card_red_6 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (8).png", position2d=pos_6, scale2d=(bg_ratio, bg_ratio),
+        card_red_6 = RenderableImage("resources/images/ui/screens/StartScreenObject/Object 1 (8).png", position2d=pos_6, scale2d=(bg_ratio, bg_ratio),
                                      rotation2d=rotation_identity)
-        card_red_7 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (7).png", position2d=pos_7, scale2d=(bg_ratio, bg_ratio),
+        card_red_7 = RenderableImage("resources/images/ui/screens/StartScreenObject/Object 1 (7).png", position2d=pos_7, scale2d=(bg_ratio, bg_ratio),
                                      rotation2d=rotation_identity)
-        card_red_8 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (6).png", position2d=pos_8, scale2d=(bg_ratio, bg_ratio),
+        card_red_8 = RenderableImage("resources/images/ui/screens/StartScreenObject/Object 1 (6).png", position2d=pos_8, scale2d=(bg_ratio, bg_ratio),
                                      rotation2d=rotation_identity)
-        card_red_9 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (5).png", position2d=pos_9, scale2d=(bg_ratio, bg_ratio),
-                                     rotation2d=rotation_identity)
-
-        title_image = RenderableImage("resources/images/ui/screen/StartScreenObject/NottyGame.png", position2d=(WINDOW_WIDTH * 0.5, WINDOW_HEIGHT * 0.5), scale2d=(bg_ratio, bg_ratio),
+        card_red_9 = RenderableImage("resources/images/ui/screens/StartScreenObject/Object 1 (5).png", position2d=pos_9, scale2d=(bg_ratio, bg_ratio),
                                      rotation2d=rotation_identity)
 
-        card_yellow_1 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (10).png", position2d=pos_10, scale2d=(bg_ratio, bg_ratio),
+        title_image = RenderableImage("resources/images/ui/screens/StartScreenObject/NottyGame.png", position2d=(WINDOW_WIDTH * 0.5, WINDOW_HEIGHT * 0.5), scale2d=(bg_ratio, bg_ratio),
                                      rotation2d=rotation_identity)
-        card_yellow_2 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (11).png", position2d=pos_11, scale2d=(bg_ratio, bg_ratio),
+
+        card_yellow_1 = RenderableImage("resources/images/ui/screens/StartScreenObject/Object 1 (10).png", position2d=pos_10, scale2d=(bg_ratio, bg_ratio),
                                      rotation2d=rotation_identity)
-        card_yellow_3 = RenderableImage("resources/images/ui/screen/StartScreenObject/Object 1 (12).png", position2d=pos_12, scale2d=(bg_ratio, bg_ratio),
+        card_yellow_2 = RenderableImage("resources/images/ui/screens/StartScreenObject/Object 1 (11).png", position2d=pos_11, scale2d=(bg_ratio, bg_ratio),
+                                     rotation2d=rotation_identity)
+        card_yellow_3 = RenderableImage("resources/images/ui/screens/StartScreenObject/Object 1 (12).png", position2d=pos_12, scale2d=(bg_ratio, bg_ratio),
                                      rotation2d=rotation_identity)
 
         self.objects.append(card_red_1)
@@ -1443,7 +1443,6 @@ class StartScreen(ScreenBase):
         animation.play_animation(title_image, alpha_animation_sequence, layer=1)
         animation.play_animation(card_yellow_1, hop_with_overshoot_sequence("rotation2d",card_yellow_1.rotation2d, math_util.euler_angle_to_rotation(5),0,4,hop_time=0.7))
         animation.play_animation(card_yellow_3, hop_with_overshoot_sequence("rotation2d",card_yellow_3.rotation2d, math_util.euler_angle_to_rotation(-5),2,2,hop_time=0.7))
-        # animation.play_animation(card_yellow_2, vibrate_once_2d("rotation2d", card_yellow_2.rotation2d, (0.1, 0.1), 0.5))
 
         for card in start_screen_lower_group:
             pretime += 0.1
