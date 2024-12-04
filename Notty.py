@@ -64,7 +64,6 @@ def pop_up_buttons(button_list, pretime = 0, posttime = 1):
         pretime += 0.1
         posttime -= 0.1
 
-
 class VisualObject:
     def __init__(self, position2d=(0, 0), scale2d=(1, 1), rotation2d=(1, 0), alpha=255):
         self.position2d = position2d
@@ -270,7 +269,6 @@ class ClickableLabel(Label):
 
     def add_on_cursor_exit_listener(self, function):
         self.cursor_exit_listener_list.append(function)
-
 
 def set_label_cursor_anim_effect(label:ClickableLabel):
     start_angle = label.euler_angle
@@ -499,27 +497,45 @@ class Card(RenderableImage):
     def draw(self, screen):
         """Draw the card with highlighting if selected"""
         offset2d = math_util.rotate_vec2d(self.rotation2d, (0, self.hover_offset))
-        # hover_adjusted_pos = (self.position2d[0], self.position2d[1] + self.hover_offset)
         hover_adjusted_pos = math_util.vec_2d_plus(self.position2d, offset2d)
 
         if self.highlighted or self.selected:
-            # Create highlight surface
-            highlight = pygame.Surface((CARD_WIDTH + 8, CARD_HEIGHT + 8))
-            highlight.set_alpha(150)
+            angle = math_util.rotation_to_euler_angle(self.rotation2d)
 
-            if self.highlighted:
-                highlight.fill((147, 112, 219))  # Purple for opponent's card
-            else:
-                highlight.fill((255, 140, 0))  # Orange for selected card
+            if abs(angle) == 90:  # For left/right players
+                # Smaller highlight for side players
+                highlight = pygame.Surface((CARD_WIDTH + 4, CARD_HEIGHT + 4))
+                highlight.set_alpha(150)
 
-            highlight_x = hover_adjusted_pos[0] - (CARD_WIDTH + 8) / 2
-            highlight_y = hover_adjusted_pos[1] - (CARD_HEIGHT + 8) / 2
-            screen.blit(highlight, (highlight_x, highlight_y))
+                if self.highlighted:
+                    highlight.fill((147, 112, 219))
+                else:
+                    highlight.fill((255, 140, 0))
+
+                # Rotate highlight to match card orientation
+                highlight = pygame.transform.rotate(highlight, angle)
+                highlight_rect = highlight.get_rect(center=hover_adjusted_pos)
+                screen.blit(highlight, highlight_rect.topleft)
+            else:  # For bottom player and 2-player game
+                # Original highlight size
+                highlight = pygame.Surface((CARD_WIDTH + 8, CARD_HEIGHT + 8))
+                highlight.set_alpha(150)
+
+                if self.highlighted:
+                    highlight.fill((147, 112, 219))
+                else:
+                    highlight.fill((255, 140, 0))
+
+                highlight_x = hover_adjusted_pos[0] - (CARD_WIDTH + 8) / 2
+                highlight_y = hover_adjusted_pos[1] - (CARD_HEIGHT + 8) / 2
+                screen.blit(highlight, (highlight_x, highlight_y))
 
         original_pos = self.position2d
         self.position2d = hover_adjusted_pos
         super().draw(screen)
         self.position2d = original_pos
+
+
 
 class Player(core.IPlayerAgentListener):
     def __init__(self, position, cards=None):
@@ -779,16 +795,7 @@ class Player(core.IPlayerAgentListener):
 
     def pass_turn(self, job):
         job.add_start_evoke_listener(self.game_state.end_turn)
-
-        def flip_up_all_card(): # todo: move the function to GameState and directly call from there
-            for player in self.game_state.players:
-                for card in player.cards:
-                    card.is_raised = False
-                    card.hover_offset = 0
-                    card.selected = False
-                    card.set_face_up()
-        job.add_start_evoke_listener(flip_up_all_card)
-
+        job.add_start_evoke_listener(self.game_state.flip_up_all_card)
 
     def start_draw_from_other_player(self, other_player, job):
         job.add_start_evoke_listener(self.game_state.toggle_take_opponent_mode)
@@ -1078,12 +1085,22 @@ class GameState:
             print(f'{card.logic_card} draw from the deck to buffer')
             card.set_face_down()
 
-            deck_x = WINDOW_WIDTH / 2
-            deck_y = WINDOW_HEIGHT / 2
-            offset_x = CARD_WIDTH + 20
+            # tiwie's code start to fix deck position
+            # deck_x = WINDOW_WIDTH / 2
+            # deck_y = WINDOW_HEIGHT / 2
+            # offset_x = CARD_WIDTH + 20
 
-            card_x = deck_x - offset_x - (len(self.drawn_cards) * (CARD_WIDTH + 10))
-            card_y = deck_y
+            deck_x = WINDOW_WIDTH / 1.85
+            deck_y = WINDOW_HEIGHT / 1.85
+            offset_x = CARD_WIDTH + 15
+
+            # card_x = deck_x - offset_x - (len(self.drawn_cards) * (CARD_WIDTH + 10))
+            # card_y = deck_y
+
+            card_x = (WINDOW_WIDTH / 1.5) - offset_x - (len(self.drawn_cards) * (CARD_WIDTH + 20))
+            card_y = WINDOW_HEIGHT / 3.4
+
+            # tiwie's code end
 
             card.update_position((card_x, card_y))
             self.drawn_cards.append(card)
@@ -1126,6 +1143,24 @@ class GameState:
         for player in self.players:
             for card in player.cards:
                 card.highlighted = False
+
+    def flip_down_all_card(self, player):
+        visual_other_player = player
+        for card in visual_other_player.cards:
+            card.is_raised = False
+            card.hover_offset = 0
+            card.selected = False
+            card.set_face_down()
+        random.shuffle(visual_other_player.cards)
+        visual_other_player.update_card_positions()
+
+    def flip_up_all_card(self):
+        for player in self.players:
+            for card in player.cards:
+                card.is_raised = False
+                card.hover_offset = 0
+                card.selected = False
+                card.set_face_up()
 
     def is_valid_sequence(self, cards):
         if len(cards) < 3:
@@ -1346,30 +1381,30 @@ class StartScreen(ScreenBase):
 
         # Animation Time!
         rotation_identity = math_util.euler_angle_to_rotation(0)
-        bg_ratio = bg_ratio = WINDOW_HEIGHT / 3546 # Shanti change to WINDOW_HEIGHT and WINDOW_WIDTH
-        pos_1 = (499 * bg_ratio, 1049 * bg_ratio)
-        pos_2 = (668 * bg_ratio, 777 * bg_ratio)
-        pos_3 = (971 * bg_ratio, 849 * bg_ratio)
-        pos_4 = (1156 * bg_ratio, 545 * bg_ratio)
-        pos_5 = (1560 * bg_ratio, 593 * bg_ratio)
+        bg_ratio = bg_ratio = WINDOW_HEIGHT / 3546 # Shanti change to WINDOW_HEIGHT
+        pos_1 = (499 * bg_ratio, 1049 * bg_ratio) # card red 9
+        pos_2 = (668 * bg_ratio, 777 * bg_ratio) # card red 10
+        pos_3 = (971 * bg_ratio, 849 * bg_ratio) # card red 8
+        pos_4 = (1156 * bg_ratio, 545 * bg_ratio) # card red 7
+        pos_5 = (1560 * bg_ratio, 593 * bg_ratio) # card red 6
         pos_6 = (3096 * bg_ratio, 625 * bg_ratio)
         pos_7 = (3462 * bg_ratio, 689 * bg_ratio)
-        pos_8 = (3825 * bg_ratio, 750 * bg_ratio)
+        pos_8 = (3825 * bg_ratio, 810 * bg_ratio) # card yellow 4 # Shanti modify the pos
         pos_9 = (4137 * bg_ratio, 945 * bg_ratio)
         pos_10 = (1972 * bg_ratio, 2729 * bg_ratio)
         pos_11 = (2356 * bg_ratio, 2641 * bg_ratio)
-        pos_12 = (2755 * bg_ratio, 2689 * bg_ratio)
-        # Shanti change to WINDOW_HEIGHT and WINDOW_WIDTH start
-        card_red_1 = RenderableImage("resources/images/ui/screens/StartScreenObject/Object 1.png", position2d=pos_1, scale2d=(bg_ratio, bg_ratio),
-                                     rotation2d=rotation_identity)
-        card_red_2 = RenderableImage("resources/images/ui/screens/StartScreenObject/Object 1 (1).png", position2d=pos_2, scale2d=(bg_ratio, bg_ratio),
-                                     rotation2d=rotation_identity)
+        pos_12 = (2705 * bg_ratio, 2740 * bg_ratio) # Shanti modify the pos
+
+        card_red_1 = RenderableImage("resources/images/ui/screens/StartScreenObject/Object 1 (4).png", position2d=pos_1, scale2d=(bg_ratio, bg_ratio),
+                                     rotation2d=rotation_identity) # Shanti rearrange the order of the card so it will be from 6 to 10
+        card_red_2 = RenderableImage("resources/images/ui/screens/StartScreenObject/Object 1 (3).png", position2d=pos_2, scale2d=(bg_ratio, bg_ratio),
+                                     rotation2d=rotation_identity)  # Shanti rearrange the order of the card so it will be from 6 to 10
         card_red_3 = RenderableImage("resources/images/ui/screens/StartScreenObject/Object 1 (2).png", position2d=pos_3, scale2d=(bg_ratio, bg_ratio),
-                                     rotation2d=rotation_identity)
-        card_red_4 = RenderableImage("resources/images/ui/screens/StartScreenObject/Object 1 (3).png", position2d=pos_4, scale2d=(bg_ratio, bg_ratio),
-                                     rotation2d=rotation_identity)
-        card_red_5 = RenderableImage("resources/images/ui/screens/StartScreenObject/Object 1 (4).png", position2d=pos_5, scale2d=(bg_ratio, bg_ratio),
-                                     rotation2d=rotation_identity)
+                                     rotation2d=rotation_identity)  # Shanti rearrange the order of the card so it will be from 6 to 10
+        card_red_4 = RenderableImage("resources/images/ui/screens/StartScreenObject/Object 1.png", position2d=pos_4, scale2d=(bg_ratio, bg_ratio),
+                                     rotation2d=rotation_identity)  # Shanti rearrange the order of the card so it will be from 6 to 10
+        card_red_5 = RenderableImage("resources/images/ui/screens/StartScreenObject/Object 1 (1).png", position2d=pos_5, scale2d=(bg_ratio, bg_ratio),
+                                     rotation2d=rotation_identity)  # Shanti rearrange the order of the card so it will be from 6 to 10
         card_red_6 = RenderableImage("resources/images/ui/screens/StartScreenObject/Object 1 (8).png", position2d=pos_6, scale2d=(bg_ratio, bg_ratio),
                                      rotation2d=rotation_identity)
         card_red_7 = RenderableImage("resources/images/ui/screens/StartScreenObject/Object 1 (7).png", position2d=pos_7, scale2d=(bg_ratio, bg_ratio),
@@ -1403,7 +1438,7 @@ class StartScreen(ScreenBase):
         self.objects.append(card_yellow_2)
         self.objects.append(card_yellow_3)
 
-        start_screen_upper_group = [card_red_5, card_red_4, card_red_3, card_red_1, card_red_2, card_red_6, card_red_7, card_red_8, card_red_9] #Shanti change the order of the draw
+        start_screen_upper_group = [card_red_1, card_red_2, card_red_3, card_red_4, card_red_5, card_red_6, card_red_7, card_red_8, card_red_9] # Shanti changed the order of draw
         start_screen_lower_group = [card_yellow_1, card_yellow_2, card_yellow_3]
         start_screen_group = [card_red_1, card_red_2, card_red_3, card_red_4, card_red_5, card_red_6, card_red_7, card_red_8, card_red_9, title_image, card_yellow_1, card_yellow_2,card_yellow_3]
 
@@ -1443,6 +1478,7 @@ class StartScreen(ScreenBase):
         animation.play_animation(title_image, alpha_animation_sequence, layer=1)
         animation.play_animation(card_yellow_1, hop_with_overshoot_sequence("rotation2d",card_yellow_1.rotation2d, math_util.euler_angle_to_rotation(5),0,4,hop_time=0.7))
         animation.play_animation(card_yellow_3, hop_with_overshoot_sequence("rotation2d",card_yellow_3.rotation2d, math_util.euler_angle_to_rotation(-5),2,2,hop_time=0.7))
+        # animation.play_animation(card_yellow_2, vibrate_once_2d("rotation2d", card_yellow_2.rotation2d, (0.1, 0.1), 0.5))
 
         for card in start_screen_lower_group:
             pretime += 0.1
@@ -1687,6 +1723,13 @@ class TwoPlayerScreen(ScreenBase):
         self.buttons['playforme'].add_click_listener(self.handle_play_for_me)
         self.buttons['quitgame'].add_click_listener(self.handle_quitgame)
 
+        self.player1_profile = RenderableImage("resources/images/ui/labels/you_icon.png",(WINDOW_WIDTH * 0.05, WINDOW_HEIGHT * 0.83),(0.04,0.04),(1,0))
+        self.player2_profile = RenderableImage("resources/images/ui/labels/computer.png",(WINDOW_WIDTH * 0.05, WINDOW_HEIGHT * 0.13),(0.04,0.04),(1,0))
+        self.objects.append(self.player1_profile)
+        self.objects.append(self.player2_profile)
+
+        self.objects.append(self.player1_profile)
+        self.objects.append(self.player2_profile)
         # Add buttons to objects list
         self.objects.extend(self.buttons.values())
 
@@ -1813,23 +1856,37 @@ class TwoPlayerScreen(ScreenBase):
             button.draw(screen)
 
         # Draw turn indicator
+        # tiwie's edit
+        # font = pygame.font.Font(None, 36)
+        # text = font.render(f"Player {self.game_state.current_player + 1}'s Turn", True, (255, 255, 255))
+        # screen.blit(text, (10, 10))
         font = pygame.font.Font(None, 36)
-        text = font.render(f"Player {self.game_state.current_player + 1}'s Turn", True, (255, 255, 255))
-        screen.blit(text, (10, 10))
 
-        # Draw instruction for taking card from opponent
-        if self.game_state.selected_opponent_card:
-            instruction_text = font.render("Press SPACEBAR to take selected card", True, (255, 255, 255))
-            # Center the text above the deck
-            text_width = instruction_text.get_width()
-            text_x = (WINDOW_WIDTH - text_width) // 2
-            screen.blit(instruction_text, (text_x, WINDOW_HEIGHT // 2 - 130))
+        # Define player names based on their index
+        player_names = ["YOUR", "Computer's"]
 
+        # Get the current player's name based on the current player index
+        current_player_name = player_names[self.game_state.current_player]
+
+        # Create the text to display
+        text = font.render(f"{current_player_name} TURN", True, (255, 255, 255))
+        screen.blit(text, (WINDOW_WIDTH/6.5, WINDOW_HEIGHT/2.25))
+
+        # tiwie delete this because we have end draw button
+        # # Draw instruction for taking card from opponent
+        # if self.game_state.selected_opponent_card:
+        #     instruction_text = font.render("Press SPACEBAR to take selected card", True, (255, 255, 255))
+        #     # Center the text above the deck
+        #     text_width = instruction_text.get_width()
+        #     text_x = (WINDOW_WIDTH - text_width) // 2
+        #     screen.blit(instruction_text, (text_x, WINDOW_HEIGHT // 2 - 130))
+
+        # tiwie edit
         # Draw cards remaining indicator if in draw mode
-        if self.game_state.draw_mode_active:
-            remaining = 3 - self.game_state.cards_drawn_this_turn
-            draw_text = font.render(f"Cards remaining: {remaining}", True, (255, 255, 255))
-            screen.blit(draw_text, (WINDOW_WIDTH - 200, 10))
+        # if self.game_state.draw_mode_active:
+        #     remaining = 3 - self.game_state.cards_drawn_this_turn
+        #     draw_text = font.render(f"Cards remaining: {remaining}", True, (255, 255, 255))
+        #     screen.blit(draw_text, (WINDOW_WIDTH - 200, 10))
 
         # For three player mode only - draw player labels
         if hasattr(self, 'draw_player_labels'):
@@ -1855,6 +1912,7 @@ class TwoPlayerScreen(ScreenBase):
             button = self.buttons['end_draw_from_player']
             button.visible = False
             button.enabled = False
+
 
 class ThreePlayerScreen(ScreenBase):
     def __init__(self):
@@ -1915,19 +1973,35 @@ class ThreePlayerScreen(ScreenBase):
                 "resources/images/ui/labels/end_turn_label.png",
                 "resources/images/ui/labels/clickable_end_turn_label.png",
                 (WINDOW_WIDTH / 1.35, WINDOW_HEIGHT / 1.075),
-                0.06)
+                0.06),
+            'end_draw_from_player': ClickableLabel(image_path1="resources/images/ui/labels/end_draw_label.png",
+                                                   image_path2="resources/images/ui/labels/clickable_end_draw_label.png",
+                                                   pos=(WINDOW_WIDTH / 2 - CARD_WIDTH - 100, WINDOW_HEIGHT / 3),scale_factor=0.1)
+
             }
 
         # Set up button click handlers
         self.buttons['pass'].add_click_listener(self.game_state.human_input.pass_turn)
         self.buttons['drawfromdeck'].add_click_listener(self.game_state.human_input.start_draw_from_deck)
+        def draw_from_player():
+            other_player = self.game_state.players[1].logic_player
+            self.game_state.human_input.start_draw_from_other_player(other_player)
 
         self.buttons['drawfromplayer'].add_click_listener(self.handle_drawfromplayer)
         self.buttons['discard'].add_click_listener(self.game_state.human_input.dispose_selected)
         self.buttons['deck'].add_click_listener(self.game_state.human_input.draw_card_from_deck)
+        self.buttons['end_draw_from_player'].add_click_listener(self.game_state.human_input.draw_from_other_player)
         self.buttons['playforme'].add_click_listener(self.handle_play_for_me)
         self.buttons['quitgame'].add_click_listener(self.handle_quitgame)
         self.buttons['end_turn'].add_click_listener(self.game_state.human_input.pass_turn)
+
+        # adding player icon
+        self.player1_profile = RenderableImage("resources/images/ui/labels/you_icon.png",(WINDOW_WIDTH * 0.05, WINDOW_HEIGHT * 0.83),(0.04,0.04),(1,0))
+        self.player2_profile = RenderableImage("resources/images/ui/labels/computer.png",(WINDOW_WIDTH * 0.95, WINDOW_HEIGHT * 0.07),(0.04,0.04),(1,0))
+        self.player3_profile = RenderableImage("resources/images/ui/labels/computer_1.png",(WINDOW_WIDTH * 0.05, WINDOW_HEIGHT * 0.07),(0.04,0.04),(1,0))
+        self.objects.append(self.player1_profile)
+        self.objects.append(self.player2_profile)
+        self.objects.append(self.player3_profile)
 
         # Add buttons to objects list
         self.objects.extend(self.buttons.values())
@@ -1936,6 +2010,11 @@ class ThreePlayerScreen(ScreenBase):
         for button in button_list:
             set_label_cursor_anim_effect(button)
         pop_up_buttons(button_list)
+
+    def set_enable_end_draw_from_other_player(self, enabled):
+        button = self.buttons['end_draw_from_player']
+        button.visible = enabled
+        button.enabled = enabled
 
     def handle_drawfromplayer(self):
         """Enable selection from either opponent"""
@@ -1964,6 +2043,7 @@ class ThreePlayerScreen(ScreenBase):
         if self.available_opponents:
             # Initialize with first opponent but allow switching
             self.active_opponent = self.available_opponents[0]
+            self.game_state.toggle_take_opponent_mode()
             for opponent in self.available_opponents:
                 self.game_state.human_input.start_draw_from_other_player(opponent.logic_player)
 
@@ -2063,49 +2143,61 @@ class ThreePlayerScreen(ScreenBase):
             button.draw(screen)
 
         # Draw turn indicator
+        # tiwi start code
+        # font = pygame.font.Font(None, 36)
+        # text = font.render(f"Player {self.game_state.current_player + 1}'s Turn", True, (255, 255, 255))
+        # screen.blit(text, (10, 10))
         font = pygame.font.Font(None, 36)
-        text = font.render(f"Player {self.game_state.current_player + 1}'s Turn", True, (255, 255, 255))
-        screen.blit(text, (10, 10))
 
-        # Draw instruction for taking card from opponent
-        if self.game_state.selected_opponent_card:
-            instruction_text = font.render("Press SPACEBAR to take selected card", True, (255, 255, 255))
-            # Center the text above the deck
-            text_width = instruction_text.get_width()
-            text_x = (WINDOW_WIDTH - text_width) // 2
-            screen.blit(instruction_text, (text_x, WINDOW_HEIGHT // 2 - 130))
+        # Define player names based on their index
+        player_names = ["YOUR", "Computer 1's", "Computer 2's"]
 
+        # Get the current player's name based on the current player index
+        current_player_name = player_names[self.game_state.current_player]
+
+        # Create the text to display
+        text = font.render(f"{current_player_name} TURN", True, (255, 255, 255))
+        screen.blit(text, (WINDOW_WIDTH/2.5, 50))
+        # tiwi end code
+        # tiwie delete this because we have end draw button
+        # # Draw instruction for taking card from opponent
+        # if self.game_state.selected_opponent_card:
+        #     instruction_text = font.render("Press SPACEBAR to take selected card", True, (255, 255, 255))
+        #     # Center the text above the deck
+        #     text_width = instruction_text.get_width()
+        #     text_x = (WINDOW_WIDTH - text_width) // 2
+        #     screen.blit(instruction_text, (text_x, WINDOW_HEIGHT // 2 - 130))
+        # tiwie edit
         # Draw cards remaining indicator if in draw mode
-        if self.game_state.draw_mode_active:
-            remaining = 3 - self.game_state.cards_drawn_this_turn
-            draw_text = font.render(f"Cards remaining: {remaining}", True, (255, 255, 255))
-            screen.blit(draw_text, (WINDOW_WIDTH - 200, 10))
+        # if self.game_state.draw_mode_active:
+        #     remaining = 3 - self.game_state.cards_drawn_this_turn
+        #     draw_text = font.render(f"Cards remaining: {remaining}", True, (255, 255, 255))
+        #     screen.blit(draw_text, (WINDOW_WIDTH - 200, 10))
 
         # For three player mode only - draw player labels
         if hasattr(self, 'draw_player_labels'):
             self.draw_player_labels(screen)
 
-        # Draw player labels for 3-player mode
-        self.draw_player_labels(screen)
+    # def draw_player_labels(self, screen):
+    #     """Draw labels to identify each player in three player layout"""
+    #     font = pygame.font.Font(None, 24)
+    #
+    #     # Bottom player (current player)
+    #     bottom_text = font.render("Player 1", True, (255, 255, 255))
+    #     screen.blit(bottom_text, (WINDOW_WIDTH / 2 - 30, WINDOW_HEIGHT - 20))
+    #
+    #     # Left player
+    #     left_text = font.render("Player 2", True, (255, 255, 255))
+    #     rotated_left_text = pygame.transform.rotate(left_text, -90) # Shanti transform the text
+    #     screen.blit(rotated_left_text, (20, WINDOW_HEIGHT / 2))
+    #
+    #     # Right player
+    #     right_text = font.render("Player 3", True, (255, 255, 255))
+    #     rotated_right_text = pygame.transform.rotate(right_text, 90) # Shanti transform the text
+    #     screen.blit(rotated_right_text, (WINDOW_WIDTH - 40, WINDOW_HEIGHT / 2)) # Shanti adjust x pos
+    #tiwie edit code
 
-    def draw_player_labels(self, screen):
-        """Draw labels to identify each player in three player layout"""
-        font = pygame.font.Font(None, 24)
-
-        # Bottom player (current player)
-        bottom_text = font.render("Player 1", True, (255, 255, 255))
-        screen.blit(bottom_text, (WINDOW_WIDTH / 2 - 30, WINDOW_HEIGHT - 20))
-
-        # Left player
-        left_text = font.render("Player 2", True, (255, 255, 255))
-        rotated_left_text = pygame.transform.rotate(left_text, -90) # Shanti transform the text
-        screen.blit(rotated_left_text, (20, WINDOW_HEIGHT / 2))
-
-        # Right player
-        right_text = font.render("Player 3", True, (255, 255, 255))
-        rotated_right_text = pygame.transform.rotate(right_text, 90) # Shanti transform the text
-        screen.blit(rotated_right_text, (WINDOW_WIDTH - 40, WINDOW_HEIGHT / 2)) # Shanti adjust x pos
-
+    # tiwie code end
 
     def update(self):
         """Update game state"""
@@ -2119,20 +2211,29 @@ class ThreePlayerScreen(ScreenBase):
         else:
             self.buttons['deck'].image_src = self.buttons['deck'].img_src_normal
 
+        if self.game_state.current_player == 0 and self.game_state.selected_opponent_card is not None:
+            button = self.buttons['end_draw_from_player']
+            button.visible = True
+            button.enabled = True
+        else:
+            button = self.buttons['end_draw_from_player']
+            button.visible = False
+            button.enabled = False
+
 class CongratsScreen(ScreenBase):
     def __init__(self):
         super().__init__(background_filename='resources/images/ui/screens/CongratulationsScreen.png')
-
+        # Shanti modify code for exit label and the scale
         self.newgame_label = NewGameLabel("resources/images/ui/labels/new_game_label.png",
                                           "resources/images/ui/labels/clickable_new_game_label.png",
-                                          (WINDOW_WIDTH / 2, WINDOW_HEIGHT / 1.1))
-        self.quit_game_label = QuitGameLabel("resources/images/ui/labels/quit_game_label.png",
-                                             "resources/images/ui/labels/clickable_quit_game_label.png",
-                                             (WINDOW_WIDTH / 1.2, WINDOW_HEIGHT / 1.1))
+                                          (WINDOW_WIDTH / 2, WINDOW_HEIGHT / 1.18), 0.13)
+        self.exit_label = ExitGameLabel("resources/images/ui/labels/exit_label.png",
+                                             "resources/images/ui/labels/clickable_exit_label.png",
+                                             (WINDOW_WIDTH / 2, WINDOW_HEIGHT / 1.08), 0.13)
 
         self.objects.append(self.newgame_label)
-        self.objects.append(self.quit_game_label)
-
+        self.objects.append(self.exit_label)
+        # Shanti code end
     def keydown(self, event):
         if event.key == K_ESCAPE:
             global game_over
@@ -2141,17 +2242,17 @@ class CongratsScreen(ScreenBase):
 class LoseScreen(ScreenBase):
     def __init__(self):
         super().__init__(background_filename='resources/images/ui/screens/SorryScreen.png')
-
+        # Shanti modify code for exit label and the scale
         self.newgame_label = NewGameLabel("resources/images/ui/labels/new_game_label.png",
                                           "resources/images/ui/labels/clickable_new_game_label.png",
-                                          (WINDOW_WIDTH / 2, WINDOW_HEIGHT / 1.1))
-        self.quit_game_label = QuitGameLabel("resources/images/ui/labels/quit_game_label.png",
-                                             "resources/images/ui/labels/clickable_quit_game_label.png",
-                                             (WINDOW_WIDTH / 1.2, WINDOW_HEIGHT / 1.1))
+                                          (WINDOW_WIDTH / 2, WINDOW_HEIGHT / 1.18), 0.13)
+        self.exit_label = ExitGameLabel("resources/images/ui/labels/exit_label.png",
+                                             "resources/images/ui/labels/clickable_exit_label.png",
+                                             (WINDOW_WIDTH / 2, WINDOW_HEIGHT / 1.08), 0.13)
 
         self.objects.append(self.newgame_label)
-        self.objects.append(self.quit_game_label)
-
+        self.objects.append(self.exit_label)
+        # Shanti code end
     def keydown(self, event):
         if event.key == K_ESCAPE:
             global game_over
