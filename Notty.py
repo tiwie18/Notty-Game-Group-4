@@ -639,7 +639,13 @@ class Player(core.IPlayerAgentListener):
         spacing = available_width / (len(self.cards) - 1) if len(self.cards) > 1 else 0
 
         # Determine starting x position and base y position
-        start_x = left_padding
+        if (self.position == 'bottom' or self.position == 'top') and len(self.cards) < 5:
+            spacing = 1.4 * CARD_WIDTH
+            total_width = (len(self.cards) - 1) * CARD_WIDTH
+            start_x = (WINDOW_WIDTH - total_width) / 2
+        else:
+            start_x = left_padding
+
         base_y = WINDOW_HEIGHT - (CARD_HEIGHT * 1.05) if self.position == 'bottom' else CARD_HEIGHT / 1.35
 
         # Position cards
