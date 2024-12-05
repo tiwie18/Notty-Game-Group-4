@@ -520,8 +520,12 @@ class Card(RenderableImage):
         """Check if a point is within the card's clickable area"""
         # Using expanded hitbox for better detection, especially for stacked cards
         # Comment: I deeply doubt about that...
-        expanded_rect = self.rect.inflate(0, 0)  # Increased from 10,10 to 20,20
-        return expanded_rect.collidepoint(pos)
+        # expanded_rect = self.rect.inflate(-10, -10)  # Increased from 10,10 to 20,20
+        x = self.image.get_size()[0] * self.scale2d[0]
+        y = self.image.get_size()[1] * self.scale2d[1]
+        card_pos = self.position2d
+        return card_pos[0] - x * 0.5 < pos[0] < card_pos[0] + x * 0.5 and card_pos[1] - y * 0.5 < pos[1] < card_pos[1] + y * 0.5
+        # return expanded_rect.collidepoint(pos)
 
     def draw(self, screen):
         """Draw the card with highlighting if selected"""
@@ -1786,7 +1790,7 @@ class TwoPlayerScreen(ScreenBase):
         for i, player in enumerate(self.game_state.players):
             if i != self.game_state.current_player:
                 clicked_card = player.handle_click(pos)
-                if clicked_card:
+                if clicked_card and self.game_state.current_player == 0:
                     self.game_state.human_input.select_from_other_player(clicked_card.logic_card)
                     return True
 
@@ -2136,7 +2140,7 @@ class ThreePlayerScreen(ScreenBase):
             if i != self.game_state.current_player:
                 clicked_card = player.handle_click(pos)
                 if clicked_card:
-                    if self.active_opponent is not None and clicked_card in self.active_opponent.cards:
+                    if self.game_state.current_player == 0 and self.active_opponent is not None and clicked_card in self.active_opponent.cards:
                         self.game_state.human_input.select_from_other_player(clicked_card.logic_card)
                     else:
                         print("Selected cards is not in your current selected opponent's hand")

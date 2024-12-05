@@ -974,6 +974,7 @@ class EndTurnJob(PlayerGameJob):
         super().__init__(PlayerOptions.PASS, player, end_turn_wrapper(player), duration = duration)
         self.add_start_evoke_listener(player.game_manager.get_player_status(player).end_turn)
         self.add_start_evoke_listener(player.player_input.deactivate)
+        # self.add_start_evoke_listener(lambda : player.game_manager.get_player_status(player).reset_turn())
         self.add_end_evoke_listener(player.game_manager.start_next_player_turn)
 
 class JobEvokeSystem:
@@ -1150,7 +1151,7 @@ class GamePlayerStatus:
         if isinstance(player_game_job, EndDrawFromOtherPlayerJob):
             return self._draw_from_other_player and (not self._end_draw_from_other_player)
         if isinstance(player_game_job, SelectCardFromCollectionJob):
-            return True
+            return not self._turn_end
         if isinstance(player_game_job, DeselectCardFromCollectionJob):
             player = player_game_job.player
             return player.selected_count() > 0
