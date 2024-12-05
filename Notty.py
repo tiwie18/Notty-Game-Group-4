@@ -1628,7 +1628,7 @@ class EndDrawLabel(ClickableLabel):
     def update(self):
         # Only show and allow interaction when cards are drawn
         self.visible = (self.game_state.draw_mode_active and
-                        len(self.game_state.drawn_cards) > 0)
+                        len(self.game_state.drawn_cards) > 0 and self.game_state.current_player == 0)
         if self.visible:
             super().update()
 
