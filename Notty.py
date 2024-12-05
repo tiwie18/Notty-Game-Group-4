@@ -664,59 +664,34 @@ class Player(core.IPlayerAgentListener):
         bottom_padding = 220
         available_width = WINDOW_HEIGHT - top_padding - bottom_padding
 
-        # Calculate spacing between cards
-        spacing = available_width / (len(self.cards) - 1) if len(self.cards) > 1 else 0
+        if len(self.cards) < 5:
+            spacing = CARD_HEIGHT * 0.8
+            total_height = (len(self.cards) - 1) * spacing + CARD_HEIGHT  # Total height including all cards
+            base_y = (WINDOW_HEIGHT - total_height) / 2
 
-        # Determine starting x position and base y position
+        else:
+            spacing = available_width / (len(self.cards) - 1) if len(self.cards) > 1 else 0
+            base_y = top_padding
+
         if self.position == 'left':
             start_x = CARD_WIDTH / 1.05
         else:
             start_x = WINDOW_WIDTH - (CARD_WIDTH * 0.95)
-        base_y = top_padding
 
         # Position cards
         for i, card in enumerate(self.cards):
-            # Kartu yang terpilih akan sedikit terangkat
             x = start_x
-            y = base_y + i * spacing  # Menggunakan base_y dan spacing untuk posisi vertikal
+            y = base_y + i * spacing
 
-            # Update posisi dan rotasi kartu
+            # Update pos
             card.update_position((x, y))
 
-            # Menentukan rotasi kartu
+            # card rotation
             if self.position == 'left':
-                card.update_rotation(math_util.euler_angle_to_rotation(-90))  # Rotasi kartu 90 derajat
+                card.update_rotation(math_util.euler_angle_to_rotation(-90))
             else:
                 card.update_rotation(math_util.euler_angle_to_rotation(90))
 
-        # for i, card in enumerate(drawing_order):
-        #     if card in self.stacked_cards:
-        #         stack_index = self.stacked_cards.index(card)
-        #         #
-        #         # base_y = start_y + 6 * (CARD_HEIGHT + VERTICAL_SPACING)
-        #         base_y = start_y + 1.65 * (CARD_HEIGHT + VERTICAL_SPACING) #START POSITION STACKED CARD
-        #
-        #         # stack_y_offset = stack_index * (VERTICAL_SPACING / 1.5)
-        #         stack_y_offset = stack_index * (-VERTICAL_SPACING / 2)
-        #         # x_offset = stack_index * (HORIZONTAL_SPACING / 2)
-        #         #
-        #         # raised_offset = card.RAISED_HORIZONTAL_OFFSET if card.is_raised else 0
-        #         # if self.position == 'left':
-        #         #     x_offset = x_offset + raised_offset
-        #         # else:
-        #         #     x_offset = -(x_offset + raised_offset)
-        #         # tiwie edit the position
-        #         final_x = x
-        #         card.update_position((final_x, base_y + stack_y_offset))
-        #         # card.update_rotation((1,0))
-        #     else:
-        #         non_stacked_index = non_stacked.index(card)
-        #         card.update_position((x, 50+ start_y + non_stacked_index * (CARD_WIDTH + VERTICAL_SPACING-10)))
-        #         # card.update_rotation((1,0))
-        #         #STACKING NON_STACKED CARDS
-        #
-        #     angle = -90 if self.position == 'left' else 90
-        #     card.update_rotation(math_util.euler_angle_to_rotation(angle))
 
     def flip_all_cards(self, face_up:bool=False):
         if not face_up:
