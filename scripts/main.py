@@ -929,6 +929,7 @@ class DrawFromOtherPlayerJob(PlayerGameJob):
         super().__init__(PlayerOptions.DRAW_CARD_FROM_PLAYER, player, draw_card_from_other_player_wrapper(player, other_player),duration)
         self.add_start_evoke_listener(
             lambda: player.game_manager.get_player_status(player).draw_from_other_player())
+        self.add_start_evoke_listener(lambda: player.game_manager.check_winner(other_player))
         self.add_end_evoke_listener(player.player_input.evaluate_situation_and_response)
 
 class SelectFromOtherPlayerJob(PlayerGameJob):

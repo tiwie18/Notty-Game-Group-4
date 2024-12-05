@@ -229,14 +229,31 @@ class ClickableLabel(Label):
         self._cursor_inside = False
         self.cursor_enter_listener_list = []
         self.cursor_exit_listener_list = []
-        self.enabled = True
+        self._enabled = True
+        self.on_enabled_listener_list = []
+        self.on_disabled_listener_list = []
+
+    @property
+    def enabled(self):
+        return self._enabled
+
+    @enabled.setter
+    def enabled(self, enabled):
+        if self._enabled != enabled:
+            self._enabled = enabled
+            if enabled:
+                for listener in self.on_enabled_listener_list:
+                    listener()
+            else:
+                for listener in self.on_disabled_listener_list:
+                    listener()
 
     def is_inside(self, pos):
         return self.pos[0] - self.width * 0.5 <= pos[0] <= self.pos[0] + self.width * 0.5 and \
             self.pos[1] - self.height * 0.5 <= pos[1] <= self.pos[1] + self.height * 0.5
 
     def update(self):
-        if not self.enabled:
+        if not self._enabled:
             return
         if self.is_inside(pygame.mouse.get_pos()):
             if not self._cursor_inside:
@@ -256,7 +273,7 @@ class ClickableLabel(Label):
             self.click()
 
     def click(self):
-        if not self.enabled:
+        if not self._enabled:
             return
         for listener in self.click_listener_list:
             listener()
@@ -270,6 +287,12 @@ class ClickableLabel(Label):
     def add_on_cursor_exit_listener(self, function):
         self.cursor_exit_listener_list.append(function)
 
+    def add_on_enabled_listener(self, function):
+        self.on_enabled_listener_list.append(function)
+
+    def add_on_disabled_listener(self, function):
+        self.on_disabled_listener_list.append(function)
+
 def set_label_cursor_anim_effect(label:ClickableLabel):
     start_angle = label.euler_angle
     start_scale2d = label.scale2d
@@ -278,6 +301,12 @@ def set_label_cursor_anim_effect(label:ClickableLabel):
     label.add_on_cursor_enter_listener(lambda : animation.play_animation(label, vibrate_once_1d("euler_angle",start_angle,amplitude,0.2)))
     label.add_on_cursor_enter_listener(lambda : animation.play_animation(label, overshoot_2d("scale2d",start_scale2d, end_scale2d,0.2), layer=1))
     label.add_on_cursor_exit_listener(lambda: animation.play_animation(label, overshoot_2d("scale2d",  end_scale2d, start_scale2d,0.2), layer=1))
+
+def set_label_enable_anim_effect(label:ClickableLabel):
+    start_scale2d = label.scale2d
+    end_scale2d = (0, 0)
+    label.add_on_enabled_listener(lambda : animation.play_animation(label, overshoot_2d("scale2d", end_scale2d, start_scale2d, 0.2), layer=1))
+    label.add_on_disabled_listener(lambda : animation.play_animation(label, move_to("scale2d", start_scale2d, end_scale2d, 0.2), layer=1))
 
 
 class PlayGameLabel(ClickableLabel):
@@ -411,7 +440,7 @@ class Card(RenderableImage):
         self.is_face_up = False
         self.is_raised = False  # New property for raised state
         self.hover_offset = 0
-        self.HOVER_DISTANCE = -70  # Distance to raise card
+        self.HOVER_DISTANCE = -20  # Distance to raise card
         self.RAISED_HORIZONTAL_OFFSET = 20  # Additional horizontal spacing for raised cards
 
         self.rect = pygame.Rect(position2d[0] - CARD_WIDTH / 2,
@@ -462,8 +491,8 @@ class Card(RenderableImage):
         old_pos = self.position2d
         # self.position2d = new_pos
         hover_adjusted_pos = (new_pos[0], new_pos[1] + self.hover_offset)
-        self.rect.x = hover_adjusted_pos[0] - CARD_WIDTH / 2
-        self.rect.y = hover_adjusted_pos[1] - CARD_HEIGHT / 2
+        self.rect.x = hover_adjusted_pos[0] - CARD_WIDTH / 3
+        self.rect.y = hover_adjusted_pos[1] - CARD_HEIGHT / 2.8
         # Animation Magic Touch Here
         if animation_layer in (0,1,2):
             animation.play_animation(self,move_to("position2d",old_pos, new_pos, 0.2),animation_layer)
@@ -504,7 +533,7 @@ class Card(RenderableImage):
 
             if abs(angle) == 90:  # For left/right players
                 # Smaller highlight for side players
-                highlight = pygame.Surface((CARD_WIDTH + 4, CARD_HEIGHT + 4))
+                highlight = pygame.Surface((CARD_WIDTH + 2, CARD_HEIGHT + 2))
                 highlight.set_alpha(150)
 
                 if self.highlighted:
@@ -518,7 +547,7 @@ class Card(RenderableImage):
                 screen.blit(highlight, highlight_rect.topleft)
             else:  # For bottom player and 2-player game
                 # Original highlight size
-                highlight = pygame.Surface((CARD_WIDTH + 8, CARD_HEIGHT + 8))
+                highlight = pygame.Surface((CARD_WIDTH + 2, CARD_HEIGHT + 2))
                 highlight.set_alpha(150)
 
                 if self.highlighted:
@@ -526,8 +555,8 @@ class Card(RenderableImage):
                 else:
                     highlight.fill((255, 140, 0))
 
-                highlight_x = hover_adjusted_pos[0] - (CARD_WIDTH + 8) / 2
-                highlight_y = hover_adjusted_pos[1] - (CARD_HEIGHT + 8) / 2
+                highlight_x = hover_adjusted_pos[0] - (CARD_WIDTH + 4) / 2
+                highlight_y = hover_adjusted_pos[1] - (CARD_HEIGHT + 4) / 2
                 screen.blit(highlight, (highlight_x, highlight_y))
 
         original_pos = self.position2d
@@ -596,48 +625,25 @@ class Player(core.IPlayerAgentListener):
         else:
             self._arrange_vertical(stacked)
 
-
     def _arrange_horizontal(self, stacked):
         """Arrange cards horizontally (for bottom and top players)"""
-        total_width = CARD_WIDTH * (5 if stacked else len(self.cards))
-        if not stacked:
-            total_width += HORIZONTAL_SPACING * (len(self.cards) - 1)
+        left_padding = 150
+        right_padding = 150
+        available_width = WINDOW_WIDTH - left_padding - right_padding
 
-        start_x = (WINDOW_WIDTH - total_width) / 3.5
+        # Calculate spacing
+        spacing = available_width / (len(self.cards) - 1) if len(self.cards) > 1 else 0
+
+        # Determine starting x position and base y position
+        start_x = left_padding
         base_y = WINDOW_HEIGHT - (CARD_HEIGHT * 1.05) if self.position == 'bottom' else CARD_HEIGHT / 1.35
 
-        # First pass: identify stacked cards
-        self.stacked_cards.clear()
-        if stacked:
-            # Calculate how many cards should be in the stack
-            stack_size = len(self.cards) - 4  # Leave 4 cards unstacked
-            self.stacked_cards = self.cards[-stack_size:]  # Take last stack_size cards
-
-        # Adjust the drawing order to ensure stacked cards are accessible
-        non_stacked = [card for card in self.cards if card not in self.stacked_cards]
-        drawing_order = non_stacked + self.stacked_cards
-
-        # Position all cards
-        for i, card in enumerate(drawing_order):
-            if card in self.stacked_cards:
-                # Position for stacked cards
-                stack_index = self.stacked_cards.index(card)
-                base_x = start_x + 3 * (total_width / 4)  # Base position for stack
-
-                # Calculate stack offset with slightly more space
-                stack_offset = stack_index * (HORIZONTAL_SPACING / 0.25)  # Increased spacing
-
-                # Apply raised offset if card is raised
-                raised_offset = card.RAISED_HORIZONTAL_OFFSET if card.is_raised else 0
-
-                x = base_x + stack_offset + raised_offset
-            else:
-                # Position for non-stacked cards
-                non_stacked_index = non_stacked.index(card)
-                x = start_x + non_stacked_index * (CARD_WIDTH + HORIZONTAL_SPACING)
-
-            card.update_position((x, base_y))
-
+        # Position cards
+        for i, card in enumerate(self.cards):
+            x = start_x + i * spacing
+            # If the card is selected, raise it by 1/3 of its height
+            y = base_y - (CARD_HEIGHT / 3) if card.selected else base_y
+            card.update_position((x, y))
             if self.position == 'top':
                 card.update_rotation(math_util.euler_angle_to_rotation(180))
             else:
@@ -651,12 +657,12 @@ class Player(core.IPlayerAgentListener):
 
         x = 100 if self.position == 'left' else WINDOW_WIDTH - 100
         # start_y = (WINDOW_HEIGHT - total_height) / 4 #Shanti change this to 4 to make it upper
-        start_y = (WINDOW_HEIGHT - total_height) / 2.5
+        start_y = (WINDOW_HEIGHT - total_height) / 4
 
         # First pass: identify stacked cards
         self.stacked_cards.clear()
         if stacked:
-            stack_size = len(self.cards) - 4  # Leave 4 cards unstacked
+            stack_size = len(self.cards) - 3  # Leave 4 cards unstacked
             self.stacked_cards = self.cards[-stack_size:]  # Take last stack_size cards
 
         # Adjust drawing order
@@ -668,10 +674,10 @@ class Player(core.IPlayerAgentListener):
                 stack_index = self.stacked_cards.index(card)
                 #
                 # base_y = start_y + 6 * (CARD_HEIGHT + VERTICAL_SPACING)
-                base_y = start_y + 2.25 * (CARD_HEIGHT + VERTICAL_SPACING) #START POSITION STACKED CARD
+                base_y = start_y + 1.65 * (CARD_HEIGHT + VERTICAL_SPACING) #START POSITION STACKED CARD
 
                 # stack_y_offset = stack_index * (VERTICAL_SPACING / 1.5)
-                stack_y_offset = stack_index * (-VERTICAL_SPACING / 1.5)
+                stack_y_offset = stack_index * (-VERTICAL_SPACING / 2)
                 # x_offset = stack_index * (HORIZONTAL_SPACING / 2)
                 #
                 # raised_offset = card.RAISED_HORIZONTAL_OFFSET if card.is_raised else 0
@@ -1044,6 +1050,8 @@ class GameState:
         """Toggle draw mode on/off"""
         if not self.has_taken_player_card_this_turn and not self.has_drawn_this_turn and self.cards_drawn_this_turn < 3:
             self.draw_mode_active = not self.draw_mode_active
+            if self.draw_mode_active and isinstance(current_screen, TwoPlayerScreen) or isinstance(current_screen, ThreePlayerScreen):
+                current_screen.buttons['drawfromdeck'].enabled = not self.draw_mode_active
             self.deck_highlighted = self.draw_mode_active
 
             # Clear drawn cards when exiting draw mode
@@ -1278,6 +1286,9 @@ class GameState:
     def start_turn(self):
         self._sync_player_turn()
         print(f"Started {self.current_player}'s turn")
+        if isinstance(current_screen, ThreePlayerScreen) or isinstance(current_screen, TwoPlayerScreen):
+            if self.current_player == 0:
+                current_screen.resume_buttons()
 
     def end_turn(self):
         self.draw_mode_active = False
@@ -1307,6 +1318,11 @@ class GameState:
 
         for player in self.players:
             player.update_card_positions()
+
+        if isinstance(current_screen, ThreePlayerScreen):
+            current_screen.active_opponent = None
+            print("Reset Active opponent")
+
 
     def draw(self, screen):
         for player in self.players:
@@ -1654,7 +1670,7 @@ class TwoPlayerScreen(ScreenBase):
             'pass': ClickableLabel(
                 "resources/images/ui/labels/game_pass_label.png",
                 "resources/images/ui/labels/clickable_game_pass_label.png",
-                (WINDOW_WIDTH / 1.7, WINDOW_HEIGHT / 1.075),
+                (WINDOW_WIDTH / 1.7, WINDOW_HEIGHT / 1.055),
                 0.065
             ),
             'drawfromdeck': ClickableLabel(
@@ -1672,13 +1688,13 @@ class TwoPlayerScreen(ScreenBase):
             'discard': ClickableLabel(
                 "resources/images/ui/labels/discard_label.png",
                 "resources/images/ui/labels/clickable_discard_label.png",
-                (WINDOW_WIDTH / 2.2, WINDOW_HEIGHT / 1.075),
+                (WINDOW_WIDTH / 2.2, WINDOW_HEIGHT / 1.055),
                 0.065
             ),
             'playforme': ClickableLabel(
                 "resources/images/ui/labels/play_for_me_label.png",
                 "resources/images/ui/labels/clickable_play_for_me_label.png",
-                (WINDOW_WIDTH / 3.65, WINDOW_HEIGHT / 1.075),
+                (WINDOW_WIDTH / 3.65, WINDOW_HEIGHT / 1.055),
                 0.065
             ),
             'quitgame': QuitGameLabel(
@@ -1690,7 +1706,7 @@ class TwoPlayerScreen(ScreenBase):
             'end_turn': ClickableLabel(
                 "resources/images/ui/labels/end_turn_label.png",
                 "resources/images/ui/labels/clickable_end_turn_label.png",
-                (WINDOW_WIDTH / 1.35, WINDOW_HEIGHT / 1.075),
+                (WINDOW_WIDTH / 1.35, WINDOW_HEIGHT / 1.055),
                 0.06),
             'end_draw_from_player': ClickableLabel(image_path1="resources/images/ui/labels/end_draw_label.png",
                                                    image_path2="resources/images/ui/labels/clickable_end_draw_label.png",
@@ -1724,8 +1740,12 @@ class TwoPlayerScreen(ScreenBase):
         button_list = list(self.buttons.values())
         for button in button_list:
             set_label_cursor_anim_effect(button)
+            set_label_enable_anim_effect(button)
         button_list.extend([self.player1_profile, self.player2_profile]) # shanti add the icon to be animate too
         pop_up_buttons(button_list)
+
+    def resume_buttons(self):
+        self.buttons['drawfromdeck'].enabled = True
 
     def set_enable_end_draw_from_other_player(self, enabled):
         button = self.buttons['end_draw_from_player']
@@ -1925,31 +1945,39 @@ class ThreePlayerScreen(ScreenBase):
             'pass': ClickableLabel(
                 "resources/images/ui/labels/game_pass_label.png",
                 "resources/images/ui/labels/clickable_game_pass_label.png",
-                (WINDOW_WIDTH / 1.7, WINDOW_HEIGHT / 1.075),
+                (WINDOW_WIDTH / 1.7, WINDOW_HEIGHT / 1.055),
                 0.065
             ),
             'drawfromdeck': ClickableLabel(
                 "resources/images/ui/labels/draw_from_deck_label.png",
                 "resources/images/ui/labels/clickable_draw_from_deck_label.png",
-                (WINDOW_WIDTH / 2.9, WINDOW_HEIGHT / 1.6),
+                (WINDOW_WIDTH * 0.5, WINDOW_HEIGHT / 1.6),
                 0.15
             ),
-            'drawfromplayer': ClickableLabel(
-                "resources/images/ui/labels/draw_from_player_label.png",
-                "resources/images/ui/labels/clickable_draw_from_player_label.png",
-                (WINDOW_WIDTH / 1.6, WINDOW_HEIGHT / 1.6),
-                0.15
-            ),
+            # 'drawfromplayer': ClickableLabel(
+            #     "resources/images/ui/labels/draw_from_player_label.png",
+            #     "resources/images/ui/labels/clickable_draw_from_player_label.png",
+            #     (WINDOW_WIDTH / 1.6, WINDOW_HEIGHT / 1.6),
+            #     0.15
+            # ),
+            'drawfromleftplayer': ClickableLabel("resources/images/ui/labels/draw_from_left_player.png",
+                                                 "resources/images/ui/labels/clickable_draw_from_left_player.png",
+                                                 (WINDOW_WIDTH * 0.22, WINDOW_HEIGHT * 0.4),
+                                                 0.06),
+            'drawfromrightplayer': ClickableLabel("resources/images/ui/labels/draw_from_right_player.png",
+                                                 "resources/images/ui/labels/clickable_draw_from_right_player.png",
+                                                 (WINDOW_WIDTH * 0.78, WINDOW_HEIGHT * 0.4),
+                                                 0.06),
             'discard': ClickableLabel(
                 "resources/images/ui/labels/discard_label.png",
                 "resources/images/ui/labels/clickable_discard_label.png",
-                (WINDOW_WIDTH / 2.2, WINDOW_HEIGHT / 1.075),
+                (WINDOW_WIDTH / 2.2, WINDOW_HEIGHT / 1.055),
                 0.065
             ),
             'playforme': ClickableLabel(
                 "resources/images/ui/labels/play_for_me_label.png",
                 "resources/images/ui/labels/clickable_play_for_me_label.png",
-                (WINDOW_WIDTH / 3.65, WINDOW_HEIGHT / 1.075),
+                (WINDOW_WIDTH / 3.65, WINDOW_HEIGHT / 1.055),
                 0.065
             ),
             'quitgame': QuitGameLabel(
@@ -1961,7 +1989,7 @@ class ThreePlayerScreen(ScreenBase):
             'end_turn': ClickableLabel(
                 "resources/images/ui/labels/end_turn_label.png",
                 "resources/images/ui/labels/clickable_end_turn_label.png",
-                (WINDOW_WIDTH / 1.35, WINDOW_HEIGHT / 1.075),
+                (WINDOW_WIDTH / 1.35, WINDOW_HEIGHT / 1.055),
                 0.06),
             'end_draw_from_player': ClickableLabel(image_path1="resources/images/ui/labels/end_draw_label.png",
                                                    image_path2="resources/images/ui/labels/clickable_end_draw_label.png",
@@ -1972,11 +2000,28 @@ class ThreePlayerScreen(ScreenBase):
         # Set up button click handlers
         self.buttons['pass'].add_click_listener(self.game_state.human_input.pass_turn)
         self.buttons['drawfromdeck'].add_click_listener(self.game_state.human_input.start_draw_from_deck)
-        def draw_from_player():
+
+        def draw_from_player_1():
+            if self.active_opponent is not None:
+                return
+            self.active_opponent = self.game_state.players[1]
             other_player = self.game_state.players[1].logic_player
             self.game_state.human_input.start_draw_from_other_player(other_player)
+            self.buttons['drawfromleftplayer'].enabled = False
+            self.buttons['drawfromrightplayer'].enabled = False
 
-        self.buttons['drawfromplayer'].add_click_listener(self.handle_drawfromplayer)
+        def draw_from_player_2():
+            if self.active_opponent is not None:
+                return
+            self.active_opponent = self.game_state.players[2]
+            other_player = self.game_state.players[2].logic_player
+            self.game_state.human_input.start_draw_from_other_player(other_player)
+            self.buttons['drawfromleftplayer'].enabled = False
+            self.buttons['drawfromrightplayer'].enabled = False
+
+        # self.buttons['drawfromplayer'].add_click_listener(self.handle_drawfromplayer)
+        self.buttons['drawfromleftplayer'].add_click_listener(draw_from_player_1)
+        self.buttons['drawfromrightplayer'].add_click_listener(draw_from_player_2)
         self.buttons['discard'].add_click_listener(self.game_state.human_input.dispose_selected)
         self.buttons['deck'].add_click_listener(self.game_state.human_input.draw_card_from_deck)
         self.buttons['end_draw_from_player'].add_click_listener(self.game_state.human_input.draw_from_other_player)
@@ -1986,8 +2031,8 @@ class ThreePlayerScreen(ScreenBase):
 
         # adding player icon
         self.player1_profile = RenderableImage("resources/images/ui/labels/you_icon.png",(WINDOW_WIDTH * 0.06, WINDOW_HEIGHT * 0.82),(0.04,0.04),(1,0)) # shanti made the modification to fix the position
-        self.player2_profile = RenderableImage("resources/images/ui/labels/computer_1.png",(WINDOW_WIDTH * 0.11, WINDOW_HEIGHT * 0.07),(0.04,0.04),(1,0))  # shanti made the modification to fix the position
-        self.player3_profile = RenderableImage("resources/images/ui/labels/computer_2.png",(WINDOW_WIDTH * 0.89, WINDOW_HEIGHT * 0.07),(0.04,0.04),(1,0)) # shanti made the modification to fix the position
+        self.player2_profile = RenderableImage("resources/images/ui/labels/computer_1.png",(WINDOW_WIDTH * 0.22, WINDOW_HEIGHT * 0.07),(0.04,0.04),(1,0))  # shanti made the modification to fix the position
+        self.player3_profile = RenderableImage("resources/images/ui/labels/computer_2.png",(WINDOW_WIDTH * 0.78, WINDOW_HEIGHT * 0.07),(0.04,0.04),(1,0)) # shanti made the modification to fix the position
         self.objects.append(self.player1_profile)
         self.objects.append(self.player2_profile)
         self.objects.append(self.player3_profile)
@@ -1998,8 +2043,14 @@ class ThreePlayerScreen(ScreenBase):
         button_list = list(self.buttons.values())
         for button in button_list:
             set_label_cursor_anim_effect(button)
+            set_label_enable_anim_effect(button)
         button_list.extend([self.player1_profile, self.player2_profile, self.player3_profile]) # shanti add the icon to be animate too
         pop_up_buttons(button_list)
+
+    def resume_buttons(self):
+        self.buttons['drawfromleftplayer'].enabled = True
+        self.buttons['drawfromrightplayer'].enabled = True
+        self.buttons['drawfromdeck'].enabled = True
 
     def set_enable_end_draw_from_other_player(self, enabled):
         button = self.buttons['end_draw_from_player']
@@ -2054,22 +2105,15 @@ class ThreePlayerScreen(ScreenBase):
                 print(f"Card selected: {clicked_card.color}_{clicked_card.number}")
             return True
 
-        # Then check both opponents' cards
-        for opponent in self.game_state.players:
-            if opponent != current_player:
-                clicked_card = opponent.handle_click(pos)
+        # Then check opponent's cards
+        for i, player in enumerate(self.game_state.players):
+            if i != self.game_state.current_player:
+                clicked_card = player.handle_click(pos)
                 if clicked_card:
-                    # Clear previous selection if exists
-                    if self.game_state.selected_opponent_card:
-                        self.game_state.selected_opponent_card.highlighted = False
-
-                    # Update active opponent and selected card
-                    self.active_opponent = opponent
-                    self.game_state.human_input.start_draw_from_other_player(opponent.logic_player)
-                    self.game_state.human_input.select_from_other_player(clicked_card.logic_card)
-                    clicked_card.highlighted = True
-                    self.game_state.selected_opponent_card = clicked_card
-                    print(f"Opponent card selected: {clicked_card.color}_{clicked_card.number}")
+                    if self.active_opponent is not None and clicked_card in self.active_opponent.cards:
+                        self.game_state.human_input.select_from_other_player(clicked_card.logic_card)
+                    else:
+                        print("Selected cards is not in your current selected opponent's hand")
                     return True
 
         return False
