@@ -1322,7 +1322,8 @@ class GameState:
         if isinstance(current_screen, ThreePlayerScreen):
             current_screen.active_opponent = None
             print("Reset Active opponent")
-
+        if isinstance(current_screen, TwoPlayerScreen) or isinstance(current_screen, ThreePlayerScreen):
+            current_screen.hide_buttons()
 
     def draw(self, screen):
         for player in self.players:
@@ -1616,10 +1617,10 @@ class StartGameScreen(ScreenBase):
 class EndDrawLabel(ClickableLabel):
     def __init__(self, game_state):
         super().__init__(
-            "resources/images/ui/labels/end_draw_label.png",
-            "resources/images/ui/labels/clickable_end_draw_label.png",
+            "resources/images/ui/labels/end_draw_from_deck.png",
+            "resources/images/ui/labels/clickable_end_draw_from_deck.png",
             (WINDOW_WIDTH / 2 + CARD_WIDTH + 100, WINDOW_HEIGHT / 2),  # Position right of deck
-            0.1  # Scale factor
+            0.05  # Scale factor
         )
         self.game_state = game_state
         self.visible = False  # Start invisible
@@ -1708,9 +1709,9 @@ class TwoPlayerScreen(ScreenBase):
                 "resources/images/ui/labels/clickable_end_turn_label.png",
                 (WINDOW_WIDTH / 1.35, WINDOW_HEIGHT / 1.055),
                 0.06),
-            'end_draw_from_player': ClickableLabel(image_path1="resources/images/ui/labels/end_draw_label.png",
-                                                   image_path2="resources/images/ui/labels/clickable_end_draw_label.png",
-                                                   pos=(WINDOW_WIDTH / 2 - CARD_WIDTH - 100, WINDOW_HEIGHT / 3),scale_factor=0.1),
+            'end_draw_from_player': ClickableLabel(image_path1="resources/images/ui/labels/end_draw_from_player.png",
+                                                   image_path2="resources/images/ui/labels/clickable_end_draw_from_player.png",
+                                                   pos=(WINDOW_WIDTH / 2 - CARD_WIDTH - 100, WINDOW_HEIGHT / 3),scale_factor=0.05),
         }
 
         self.buttons['pass'].add_click_listener(self.game_state.human_input.pass_turn)
@@ -1720,6 +1721,7 @@ class TwoPlayerScreen(ScreenBase):
         def draw_from_player():
             other_player = self.game_state.players[1].logic_player
             self.game_state.human_input.start_draw_from_other_player(other_player)
+            self.buttons['drawfromplayer'].enabled = False
 
         self.buttons['drawfromplayer'].add_click_listener(draw_from_player)
         self.buttons['discard'].add_click_listener(self.game_state.human_input.dispose_selected)
@@ -1744,8 +1746,19 @@ class TwoPlayerScreen(ScreenBase):
         button_list.extend([self.player1_profile, self.player2_profile]) # shanti add the icon to be animate too
         pop_up_buttons(button_list)
 
+    def _set_buttons_enabled(self, enabled):
+        self.buttons['drawfromdeck'].enabled = enabled
+        self.buttons['drawfromplayer'].enabled = enabled
+        self.buttons['playforme'].enabled = enabled
+        self.buttons['discard'].enabled = enabled
+        self.buttons['pass'].enabled = enabled
+        self.buttons['end_turn'].enabled = enabled
+
+    def hide_buttons(self):
+        self._set_buttons_enabled(False)
+
     def resume_buttons(self):
-        self.buttons['drawfromdeck'].enabled = True
+        self._set_buttons_enabled(True)
 
     def set_enable_end_draw_from_other_player(self, enabled):
         button = self.buttons['end_draw_from_player']
@@ -1811,7 +1824,7 @@ class TwoPlayerScreen(ScreenBase):
         """Handle auto-play button click"""
         ai_input = core.AIPlayerInput()
         self.game_state.players[0].logic_player.set_input(ai_input)
-
+        ai_input.other_player_memory = self.game_state.players[1].logic_player
         def resume_play_for_me():
             """Resume play button click"""
             ai_input = self.game_state.players[0].logic_player.player_input
@@ -1823,6 +1836,7 @@ class TwoPlayerScreen(ScreenBase):
         ai_input.add_on_deactivate_listener(resume_play_for_me)
         ai_input.activate()
         ai_input.evaluate_situation_and_response()
+        self.buttons['playforme'].enabled = False
 
     def handle_quitgame(self):
         if not self.game_state.animation_in_progress:
@@ -1991,9 +2005,9 @@ class ThreePlayerScreen(ScreenBase):
                 "resources/images/ui/labels/clickable_end_turn_label.png",
                 (WINDOW_WIDTH / 1.35, WINDOW_HEIGHT / 1.055),
                 0.06),
-            'end_draw_from_player': ClickableLabel(image_path1="resources/images/ui/labels/end_draw_label.png",
-                                                   image_path2="resources/images/ui/labels/clickable_end_draw_label.png",
-                                                   pos=(WINDOW_WIDTH / 2 - CARD_WIDTH - 100, WINDOW_HEIGHT / 3),scale_factor=0.1)
+            'end_draw_from_player': ClickableLabel(image_path1="resources/images/ui/labels/end_draw_from_player.png",
+                                                   image_path2="resources/images/ui/labels/clickable_end_draw_from_player.png",
+                                                   pos=(WINDOW_WIDTH / 2 , WINDOW_HEIGHT / 3),scale_factor=0.05)
 
             }
 
@@ -2032,7 +2046,7 @@ class ThreePlayerScreen(ScreenBase):
         # adding player icon
         self.player1_profile = RenderableImage("resources/images/ui/labels/you_icon.png",(WINDOW_WIDTH * 0.06, WINDOW_HEIGHT * 0.82),(0.04,0.04),(1,0)) # shanti made the modification to fix the position
         self.player2_profile = RenderableImage("resources/images/ui/labels/computer_1.png",(WINDOW_WIDTH * 0.22, WINDOW_HEIGHT * 0.07),(0.04,0.04),(1,0))  # shanti made the modification to fix the position
-        self.player3_profile = RenderableImage("resources/images/ui/labels/computer_2.png",(WINDOW_WIDTH * 0.78, WINDOW_HEIGHT * 0.07),(0.04,0.04),(1,0)) # shanti made the modification to fix the position
+        self.player3_profile = RenderableImage("resources/images/ui/labels/computer_2.png",(WINDOW_WIDTH * 0.78, WINDOW_HEIGHT * 0.07),(0.055,0.055),(1,0)) # shanti made the modification to fix the position
         self.objects.append(self.player1_profile)
         self.objects.append(self.player2_profile)
         self.objects.append(self.player3_profile)
@@ -2047,10 +2061,20 @@ class ThreePlayerScreen(ScreenBase):
         button_list.extend([self.player1_profile, self.player2_profile, self.player3_profile]) # shanti add the icon to be animate too
         pop_up_buttons(button_list)
 
+    def _set_buttons_enabled(self,enabled):
+        self.buttons['drawfromleftplayer'].enabled = enabled
+        self.buttons['drawfromrightplayer'].enabled = enabled
+        self.buttons['drawfromdeck'].enabled = enabled
+        self.buttons['playforme'].enabled = enabled
+        self.buttons['discard'].enabled = enabled
+        self.buttons['pass'].enabled = enabled
+        self.buttons['end_turn'].enabled = enabled
+
+    def hide_buttons(self):
+        self._set_buttons_enabled(False)
+
     def resume_buttons(self):
-        self.buttons['drawfromleftplayer'].enabled = True
-        self.buttons['drawfromrightplayer'].enabled = True
-        self.buttons['drawfromdeck'].enabled = True
+        self._set_buttons_enabled(True)
 
     def set_enable_end_draw_from_other_player(self, enabled):
         button = self.buttons['end_draw_from_player']
@@ -2122,6 +2146,8 @@ class ThreePlayerScreen(ScreenBase):
         """Handle auto-play button click"""
         ai_input = core.AIPlayerInput()
         self.game_state.players[0].logic_player.set_input(ai_input)
+        if self.active_opponent is not None:
+            ai_input.other_player_memory = self.active_opponent.logic_player
 
         def resume_play_for_me():
             """Resume play button click"""
@@ -2134,6 +2160,7 @@ class ThreePlayerScreen(ScreenBase):
         ai_input.add_on_deactivate_listener(resume_play_for_me)
         ai_input.activate()
         ai_input.evaluate_situation_and_response()
+        self.buttons['playforme'].enabled = False
 
     def handle_quitgame(self):
         """Handle quit game button click"""
