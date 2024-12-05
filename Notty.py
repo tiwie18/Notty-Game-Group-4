@@ -1015,7 +1015,7 @@ class GameState:
         logic_player = player.logic_player
         logic_selected_cards = logic_player.selected_as_list()
         new_cards = [self.logic_card_to_card_mapping[logic_card] for logic_card in logic_selected_cards]
-        old_cards = [player.selected_cards]
+        old_cards = player.selected_cards
         diff_in, diff_out = list_diff(old_cards, new_cards)
         for card in diff_out:
             player.selected_cards.remove(card)
@@ -1045,17 +1045,6 @@ class GameState:
         if not self.has_taken_player_card_this_turn and not self.has_drawn_this_turn and self.cards_drawn_this_turn < 3:
             self.draw_mode_active = not self.draw_mode_active
             self.deck_highlighted = self.draw_mode_active
-
-            # Handle current player's cards when entering draw mode
-            current_player = self.players[self.current_player]
-            if self.draw_mode_active:
-                # Reset all cards when entering draw mode
-                for card in current_player.cards:
-                    card.is_raised = False
-                    card.hover_offset = 0  # Force cards to stay down
-                    card.selected = False
-                current_player.selected_cards.clear()
-                current_player.update_card_positions()
 
             # Clear drawn cards when exiting draw mode
             if not self.draw_mode_active:
@@ -1301,9 +1290,10 @@ class GameState:
 
         for player in self.players:
             self._sync_player_card(player)
-            for card in player.selected_cards:
-                card.selected = False
-            player.selected_cards.clear()
+            self._sync_player_selected_card(player)
+            # for card in player.selected_cards:
+            #     card.selected = False
+            # player.selected_cards.clear()
         self._sync_deck_card()
 
         # current_player = self.players[self.current_player]
