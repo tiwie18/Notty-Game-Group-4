@@ -1859,9 +1859,11 @@ class TwoPlayerScreen(ScreenBase):
         """Handle keyboard input"""
         if event.key == K_SPACE:
             # self.game_state.take_opponent_card()
-            self.game_state.human_input.draw_from_other_player()
+            if self.buttons['end_draw_from_player'].enabled:
+                self.game_state.human_input.draw_from_other_player()
         elif event.key == K_RETURN:
-            self.game_state.end_turn()
+            if self.buttons['end_turn'].enabled:
+                self.game_state.human_input.pass_turn()
         elif event.key == K_ESCAPE:
             global current_screen
             current_screen = HomeScreen()
@@ -2184,9 +2186,12 @@ class ThreePlayerScreen(ScreenBase):
     def keydown(self, event):
         """Handle keyboard input"""
         if event.key == K_SPACE:
-            self.game_state.human_input.draw_from_other_player()
+            # self.game_state.take_opponent_card()
+            if self.buttons['end_draw_from_player'].enabled:
+                self.game_state.human_input.draw_from_other_player()
         elif event.key == K_RETURN:
-            self.game_state.human_input.pass_turn()
+            if self.buttons['end_turn'].enabled:
+                self.game_state.human_input.pass_turn()
         elif event.key == K_ESCAPE:
             global current_screen
             current_screen = HomeScreen()

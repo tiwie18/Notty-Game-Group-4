@@ -563,6 +563,8 @@ class PlayerAgent(GameLogicActor):
             print(f"{card} was selected")
         else:
             raise ValueError(f"{card} not in collection!")
+            pass
+
 
     def mark_card_unselected(self, card):
         if card in self._collection.collection:
@@ -700,9 +702,12 @@ class PlayerAgent(GameLogicActor):
 
     def draw_from_other_player(self, other_player):
         job = DrawFromOtherPlayerJob(self, other_player)
-        card = other_player.other_selected_card()
-        for listener in self._action_listeners:
-            listener.draw_from_other_player(other_player, card, job)
+        try:
+            card = other_player.other_selected_card()
+            for listener in self._action_listeners:
+                listener.draw_from_other_player(other_player, card, job)
+        except:
+            raise
         return self.send_request(job)
 
     def end_draw_from_other_player(self):
@@ -1140,6 +1145,7 @@ class GamePlayerStatus:
         if isinstance(player_game_job, SelectFromOtherPlayerJob):
             return self._start_draw_from_other_player and (not self._draw_from_other_player) and self._other_player.card_count() > 0
         if isinstance(player_game_job, DrawFromOtherPlayerJob):
+            print(f"draw: {self._draw_from_other_player}, other: {self._draw_from_other_player}")
             return self._start_draw_from_other_player and self._select_from_other_player and (not self._draw_from_other_player)
         if isinstance(player_game_job, EndDrawFromOtherPlayerJob):
             return self._draw_from_other_player and (not self._end_draw_from_other_player)
